@@ -24,7 +24,7 @@ namespace PeekThrough
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 _logic = new GhostLogic();
-                _hook = new KeyboardHook();
+                _hook = new KeyboardHook(_logic);
 
                 _hook.OnLWinDown += _logic.OnKeyDown;
                 _hook.OnLWinUp += _logic.OnKeyUp;

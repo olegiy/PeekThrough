@@ -9,6 +9,9 @@ namespace PeekThrough
 {
     internal class GhostLogic : IDisposable
     {
+        // Публичное свойство для проверки, нужно ли подавлять клавишу Win
+        public bool ShouldSuppressWinKey { get; private set; }
+
         // Константы
         private const int GHOST_MODE_ACTIVATION_DELAY_MS = 500;
         private const int BEEP_FREQUENCY_ACTIVATE = 1000;
@@ -105,11 +108,12 @@ namespace PeekThrough
                     HideTooltip();
                     NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
                     _ghostModeActive = false;
+                    ShouldSuppressWinKey = false;
                 }
                 else
                 {
-                    // It was a short press, trigger Start Menu
-                    SendLWinClick();
+                    // It was a short press - Windows will handle the key event normally
+                    // No need to simulate the key press since we're not suppressing it
                 }
             }
         }
@@ -159,6 +163,7 @@ namespace PeekThrough
             {
                 _targetHwnd = hwnd;
                 _ghostModeActive = true;
+                ShouldSuppressWinKey = true;
             }
 
             try

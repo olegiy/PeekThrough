@@ -11,12 +11,14 @@ namespace PeekThrough
         private IntPtr _hookID = IntPtr.Zero;
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
+        private GhostLogic _ghostLogic;
 
         public event Action OnLWinDown;
         public event Action OnLWinUp;
 
-        public KeyboardHook()
+        public KeyboardHook(GhostLogic ghostLogic)
         {
+            _ghostLogic = ghostLogic;
             _proc = HookCallback;
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
             _hookID = SetHook(_proc);
@@ -82,8 +84,12 @@ namespace PeekThrough
                         }, null);
                     }
                     
-                    // Всегда подавляем стандартное поведение Win клавиши
-                    return (IntPtr)1;
+                    // Подавляем стандартное поведение Win клавиши только если активен Ghost Mode
+                    // При коротком нажатии позволяем Windows обработать событие (открыть меню Пуск)
+                    if (_ghostLogic != null && _ghostLogic.ShouldSuppressWinKey)
+                    {
+                        return (IntPtr)1;
+                    }
                 }
             }
             return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
