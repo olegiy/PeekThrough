@@ -56,3 +56,13 @@ $RECYCLE.BIN/
 *~
 *.swp
 *.bak
+
+# --- AI Agent Configuration (Kilo Code) ---
+.kilocode/
+.kilocodemodes
+.shared/
+.kiloignore
+kilocodeignore
+
+# --- Project Plans ---
+plans/
