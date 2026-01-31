@@ -1,0 +1,23 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Window Frame -->
+  <rect x="48" y="48" width="160" height="160" rx="12" fill="#ffffff" stroke="#334155" stroke-width="12" />
+  <!-- Title Bar -->
+  <path d="M48 60 C48 53.3726 53.3726 48 60 48 H196 C202.627 48 208 53.3726 208 60 V80 H48 V60 Z" fill="#334155" />
+  <circle cx="70" cy="64" r="6" fill="#ef4444" />
+  <circle cx="90" cy="64" r="6" fill="#f59e0b" />
+  <circle cx="110" cy="64" r="6" fill="#22c55e" />
+
+  <!-- Ghost Character Peeking -->
+  <g transform="translate(140, 120)">
+    <!-- Body -->
+    <path d="M0 0 C-20 0 -35 15 -35 35 V80 H35 V35 C35 15 20 0 0 0 Z" fill="#f8fafc" stroke="#334155" stroke-width="6" />
+    <!-- Eyes -->
+    <circle cx="-12" cy="30" r="5" fill="#1e293b" />
+    <circle cx="12" cy="30" r="5" fill="#1e293b" />
+    <!-- Blush -->
+    <circle cx="-18" cy="40" r="3" fill="#fda4af" opacity="0.6" />
+    <circle cx="18" cy="40" r="3" fill="#fda4af" opacity="0.6" />
+    <!-- Hands holding the frame edge -->
+    <circle cx="-35" cy="60" r="8" fill="#f8fafc" stroke="#334155" stroke-width="4" />
+  </g>
+</svg>

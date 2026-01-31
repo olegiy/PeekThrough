@@ -46,7 +46,7 @@ redesign_plan.md
 *.jpg
 *.jpeg
 *.gif
-*.svg
+# *.svg
 *.webp
 *.mp4
 *.pdf

@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace PeekThrough
 {
-    // РљР»Р°СЃСЃ РґР»СЏ С…СЂР°РЅРµРЅРёСЏ СЃРѕСЃС‚РѕСЏРЅРёСЏ РѕРєРЅР° РІ СЃС‚РµРєРµ Ghost Mode
+    // Класс для хранения состояния окна в стеке Ghost Mode
     internal class GhostWindowState
     {
         public IntPtr Hwnd { get; set; }
@@ -17,10 +17,10 @@ namespace PeekThrough
 
     internal class GhostLogic : IDisposable
     {
-        // РџСѓР±Р»РёС‡РЅРѕРµ СЃРІРѕР№СЃС‚РІРѕ РґР»СЏ РїСЂРѕРІРµСЂРєРё, РЅСѓР¶РЅРѕ Р»Рё РїРѕРґР°РІР»СЏС‚СЊ РєР»Р°РІРёС€Сѓ Win
+        // Публичное свойство для проверки, нужно ли подавлять клавишу Win
         public bool ShouldSuppressWinKey { get; private set; }
         
-        // РџСѓР±Р»РёС‡РЅРѕРµ СЃРІРѕР№СЃС‚РІРѕ РґР»СЏ РїСЂРѕРІРµСЂРєРё, Р°РєС‚РёРІРµРЅ Р»Рё Ghost Mode
+        // Публичное свойство для проверки, активен ли Ghost Mode
         public bool IsGhostModeActive
         {
             get
@@ -32,11 +32,11 @@ namespace PeekThrough
             }
         }
 
-        // РљРѕРЅСЃС‚Р°РЅС‚С‹
-        private const int GHOST_MODE_ACTIVATION_DELAY_MS = 500;
+        // Константы
+        private const int GHOST_MODE_ACTIVATION_DELAY_MS = 1000;
         private const int BEEP_FREQUENCY_ACTIVATE = 1000;
         private const int BEEP_FREQUENCY_DEACTIVATE = 500;
-        private const int BEEP_FREQUENCY_ADD = 1500; // Р’С‹СЃРѕРєРёР№ Р·РІСѓРє РїСЂРё РґРѕР±Р°РІР»РµРЅРёРё РѕРєРЅР°
+        private const int BEEP_FREQUENCY_ADD = 1500; // Высокий звук при добавлении окна
         private const int BEEP_DURATION_MS = 50;
         private const byte GHOST_OPACITY = 38; // ~15% opacity
         private const byte FULL_OPACITY = 255;
@@ -49,21 +49,21 @@ namespace PeekThrough
         private Timer _timer;
         private bool _isLWinDown;
         private bool _ghostModeActive;
-        private bool _timerFired; // Р¤Р»Р°Рі: СЃСЂР°Р±РѕС‚Р°Р» Р»Рё С‚Р°Р№РјРµСЂ (Р±С‹Р»Рѕ Р»Рё СѓРґРµСЂР¶Р°РЅРёРµ)
+        private bool _timerFired; // Флаг: сработал ли таймер (было ли удержание)
         
-        // РЎС‚РµРє РѕРєРѕРЅ РІ Ghost Mode
+        // Стек окон в Ghost Mode
         private List<GhostWindowState> _ghostWindows = new List<GhostWindowState>();
         
-        // РўРµРєСѓС‰РµРµ С†РµР»РµРІРѕРµ РѕРєРЅРѕ (РїСЂРё СѓРґРµСЂР¶Р°РЅРёРё)
+        // Текущее целевое окно (при удержании)
         private IntPtr _currentTargetHwnd = IntPtr.Zero;
 
         private Form _tooltipForm;
         private Label _tooltipLabel;
         
-        // Р¤Р»Р°Рі РґР»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ СЃРѕСЃС‚РѕСЏРЅРёСЏ Dispose
+        // Флаг для отслеживания состояния Dispose
         private bool _disposed = false;
         
-        // РћРїС‚РёРјРёР·Р°С†РёСЏ: HashSet РґР»СЏ РїСЂРѕРІРµСЂРєРё РёРіРЅРѕСЂРёСЂСѓРµРјС‹С… РєР»Р°СЃСЃРѕРІ РѕРєРѕРЅ
+        // Оптимизация: HashSet для проверки игнорируемых классов окон
         private static readonly HashSet<string> IgnoredWindowClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Progman", "WorkerW", "Shell_TrayWnd"
@@ -75,7 +75,7 @@ namespace PeekThrough
             _timer.Interval = GHOST_MODE_ACTIVATION_DELAY_MS;
             _timer.Tick += OnTimerTick;
 
-            // Initialize Tooltip Form СЃ СѓР»СѓС‡С€РµРЅРЅС‹РјРё РЅР°СЃС‚СЂРѕР№РєР°РјРё
+            // Initialize Tooltip Form с улучшенными настройками
             _tooltipForm = new Form();
             _tooltipForm.FormBorderStyle = FormBorderStyle.None;
             _tooltipForm.ShowInTaskbar = false;
@@ -85,13 +85,13 @@ namespace PeekThrough
             _tooltipForm.StartPosition = FormStartPosition.Manual;
             _tooltipForm.Opacity = 0.95;
             
-            // РљР»СЋС‡РµРІС‹Рµ СѓР»СѓС‡С€РµРЅРёСЏ: Р·Р°РїСЂРµС‚ С„РѕРєСѓСЃР° Рё РєР»РёРєРѕРІ
+            // Ключевые улучшения: запрет фокуса и кликов
             _tooltipForm.Enabled = false;
             _tooltipForm.ShowIcon = false;
             _tooltipForm.ControlBox = false;
             
             _tooltipLabel = new Label();
-            _tooltipLabel.Text = "рџ‘» Ghost Mode";
+            _tooltipLabel.Text = "?? Ghost Mode";
             _tooltipLabel.AutoSize = true;
             _tooltipLabel.Location = new Point(5, 5);
             _tooltipLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
@@ -99,8 +99,8 @@ namespace PeekThrough
             _tooltipForm.AutoSize = true;
             _tooltipLabel.AutoSize = true;
             
-            // РЈСЃС‚Р°РЅРѕРІРєР° СЃС‚РёР»СЏ РѕРєРЅР° РґР»СЏ РїРѕР»РЅРѕР№ РїСЂРѕР·СЂР°С‡РЅРѕСЃС‚Рё РґР»СЏ СЃРѕР±С‹С‚РёР№ РјС‹С€Рё
-            // Р”РµР»Р°РµРј СЌС‚Рѕ РїРѕСЃР»Рµ СЃРѕР·РґР°РЅРёСЏ handle С„РѕСЂРјС‹
+            // Установка стиля окна для полной прозрачности для событий мыши
+            // Делаем это после создания handle формы
             _tooltipForm.Load += (s, e) =>
             {
                 int exStyle = NativeMethods.GetWindowLongPtr(_tooltipForm.Handle, NativeMethods.GWL_EXSTYLE).ToInt32();
@@ -115,18 +115,18 @@ namespace PeekThrough
             {
                 if (_isLWinDown) return;
                 _isLWinDown = true;
-                _timerFired = false; // РЎР±СЂР°СЃС‹РІР°РµРј С„Р»Р°Рі С‚Р°Р№РјРµСЂР°
+                _timerFired = false; // Сбрасываем флаг таймера
                 
-                // Р•СЃР»Рё Ghost Mode СѓР¶Рµ Р°РєС‚РёРІРµРЅ, СЌС‚Рѕ РїРѕРІС‚РѕСЂРЅРѕРµ РЅР°Р¶Р°С‚РёРµ РґР»СЏ РґРѕР±Р°РІР»РµРЅРёСЏ СЃР»РµРґСѓСЋС‰РµРіРѕ РѕРєРЅР°
+                // Если Ghost Mode уже активен, это повторное нажатие для добавления следующего окна
                 if (_ghostModeActive)
                 {
-                    // РџРµСЂРµР·Р°РїСѓСЃРєР°РµРј С‚Р°Р№РјРµСЂ РґР»СЏ РѕРїСЂРµРґРµР»РµРЅРёСЏ РґР»РёРЅРЅРѕРіРѕ РЅР°Р¶Р°С‚РёСЏ
+                    // Перезапускаем таймер для определения длинного нажатия
                     _timer.Stop();
                     _timer.Start();
                 }
                 else
                 {
-                    // РџРµСЂРІРѕРµ РЅР°Р¶Р°С‚РёРµ
+                    // Первое нажатие
                     _timer.Start();
                 }
             }
@@ -143,15 +143,15 @@ namespace PeekThrough
                 {
                     if (_timerFired)
                     {
-                        // Р‘С‹Р»Рѕ СѓРґРµСЂР¶Р°РЅРёРµ - РѕРєРЅР° РѕСЃС‚Р°СЋС‚СЃСЏ РїСЂРѕР·СЂР°С‡РЅС‹РјРё
-                        // РЎРєСЂС‹РІР°РµРј С‚СѓР»С‚РёРї РЅРѕ РѕСЃС‚Р°РІР»СЏРµРј Ghost Mode Р°РєС‚РёРІРЅС‹Рј
+                        // Было удержание - окна остаются прозрачными
+                        // Скрываем тултип но оставляем Ghost Mode активным
                         HideTooltip();
-                        _timerFired = false; // РЎР±СЂР°СЃС‹РІР°РµРј РґР»СЏ СЃР»РµРґСѓСЋС‰РµРіРѕ СЂР°Р·Р°
-                        // ShouldSuppressWinKey РѕСЃС‚Р°РµС‚СЃСЏ true
+                        _timerFired = false; // Сбрасываем для следующего раза
+                        // ShouldSuppressWinKey остается true
                     }
                     else
                     {
-                        // Р‘С‹Р» РєР»РёРє (РєРѕСЂРѕС‚РєРѕРµ РЅР°Р¶Р°С‚РёРµ) - РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІСЃРµ РѕРєРЅР°
+                        // Был клик (короткое нажатие) - восстанавливаем все окна
                         RestoreAllWindows();
                         HideTooltip();
                         NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
@@ -163,14 +163,14 @@ namespace PeekThrough
                 }
                 else
                 {
-                    // Ghost Mode РЅРµ Р°РєС‚РёРІРµРЅ Рё СЌС‚Рѕ Р±С‹Р»Рѕ РєРѕСЂРѕС‚РєРѕРµ РЅР°Р¶Р°С‚РёРµ
-                    // Windows СЃР°РјР° РѕР±СЂР°Р±РѕС‚Р°РµС‚ РѕС‚РєСЂС‹С‚РёРµ РјРµРЅСЋ РџСѓСЃРє
+                    // Ghost Mode не активен и это было короткое нажатие
+                    // Windows сама обработает открытие меню Пуск
                     ShouldSuppressWinKey = false;
                 }
             }
         }
 
-        // РџСѓР±Р»РёС‡РЅС‹Р№ РјРµС‚РѕРґ РґР»СЏ РґРµР°РєС‚РёРІР°С†РёРё Ghost Mode РёР·РІРЅРµ (РЅР°РїСЂРёРјРµСЂ, РїСЂРё РЅР°Р¶Р°С‚РёРё РґСЂСѓРіРѕР№ РєР»Р°РІРёС€Рё)
+        // Публичный метод для деактивации Ghost Mode извне (например, при нажатии другой клавиши)
         public void DeactivateGhostMode()
         {
             lock (_lockObject)
@@ -181,7 +181,7 @@ namespace PeekThrough
                 _timerFired = false;
                 _timer.Stop();
                 
-                // Deactivate Ghost Mode - РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІСЃРµ РѕРєРЅР°
+                // Deactivate Ghost Mode - восстанавливаем все окна
                 RestoreAllWindows();
                 HideTooltip();
                 NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
@@ -192,12 +192,12 @@ namespace PeekThrough
             }
         }
         
-        // РџСѓР±Р»РёС‡РЅС‹Р№ РјРµС‚РѕРґ РґР»СЏ Р±Р»РѕРєРёСЂРѕРІРєРё Р°РєС‚РёРІР°С†РёРё Ghost Mode (РєРѕРіРґР° РґСЂСѓРіР°СЏ РєР»Р°РІРёС€Р° РЅР°Р¶Р°С‚Р° РґРѕ Win)
+        // Публичный метод для блокировки активации Ghost Mode (когда другая клавиша нажата до Win)
         public void BlockGhostMode()
         {
             lock (_lockObject)
             {
-                // Р•СЃР»Рё СѓР¶Рµ РЅР°Р¶Р°С‚Р° РґСЂСѓРіР°СЏ РєР»Р°РІРёС€Р°, РѕС‚РјРµРЅСЏРµРј РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ Р°РєС‚РёРІР°С†РёРё Ghost Mode
+                // Если уже нажата другая клавиша, отменяем возможность активации Ghost Mode
                 _isLWinDown = false;
                 _timer.Stop();
             }
@@ -210,7 +210,7 @@ namespace PeekThrough
                 _timer.Stop(); // One-shot trigger check
                 if (_isLWinDown)
                 {
-                    _timerFired = true; // РћС‚РјРµС‡Р°РµРј С‡С‚Рѕ С‚Р°Р№РјРµСЂ СЃСЂР°Р±РѕС‚Р°Р» (Р±С‹Р»Рѕ СѓРґРµСЂР¶Р°РЅРёРµ)
+                    _timerFired = true; // Отмечаем что таймер сработал (было удержание)
                     ActivateGhostMode();
                 }
             }
@@ -229,14 +229,14 @@ namespace PeekThrough
             // Get the root window (ancestor) because we might be hovering a child control
             hwnd = NativeMethods.GetAncestor(hwnd, NativeMethods.GA_ROOT);
 
-            // РџСЂРѕРІРµСЂРєР° РєР»Р°СЃСЃР° РѕРєРЅР° СЃ РјРёРЅРёРјР°Р»СЊРЅС‹РјРё Р°Р»Р»РѕРєР°С†РёСЏРјРё
+            // Проверка класса окна с минимальными аллокациями
             var className = new StringBuilder(256);
             if (NativeMethods.GetClassName(hwnd, className, className.Capacity) > 0)
             {
                 string cls = className.ToString();
                 if (IgnoredWindowClasses.Contains(cls))
                 {
-                    // РРіРЅРѕСЂРёСЂСѓРµРј СЃРёСЃС‚РµРјРЅС‹Рµ РѕРєРЅР°, РЅРѕ РѕСЃС‚Р°РІР»СЏРµРј Ghost Mode Р°РєС‚РёРІРЅС‹Рј РµСЃР»Рё СѓР¶Рµ РµСЃС‚СЊ РѕРєРЅР°
+                    // Игнорируем системные окна, но оставляем Ghost Mode активным если уже есть окна
                     lock (_lockObject)
                     {
                         if (_ghostWindows.Count > 0)
@@ -248,12 +248,12 @@ namespace PeekThrough
 
             lock (_lockObject)
             {
-                // РџСЂРѕРІРµСЂСЏРµРј, РЅРµ РґРѕР±Р°РІР»РµРЅРѕ Р»Рё СЌС‚Рѕ РѕРєРЅРѕ СѓР¶Рµ
+                // Проверяем, не добавлено ли это окно уже
                 foreach (var existing in _ghostWindows)
                 {
                     if (existing.Hwnd == hwnd)
                     {
-                        // РћРєРЅРѕ СѓР¶Рµ РІ СЃС‚РµРєРµ, РїСЂРѕСЃС‚Рѕ РѕР±РЅРѕРІР»СЏРµРј С‚СѓР»С‚РёРї
+                        // Окно уже в стеке, просто обновляем тултип
                         ShowTooltip(cursorPos);
                         return;
                     }
@@ -266,7 +266,7 @@ namespace PeekThrough
 
             try
             {
-                // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РёР№ СЃС‚РёР»СЊ РѕРєРЅР°
+                // Получаем текущий стиль окна
                 int originalExStyle = NativeMethods.GetWindowLongPtr(_currentTargetHwnd, NativeMethods.GWL_EXSTYLE).ToInt32();
                 bool wasAlreadyLayered = (originalExStyle & NativeMethods.WS_EX_LAYERED) != 0;
 
@@ -275,7 +275,7 @@ namespace PeekThrough
                 NativeMethods.SetWindowLongPtr(_currentTargetHwnd, NativeMethods.GWL_EXSTYLE, new IntPtr(newStyle));
                 NativeMethods.SetLayeredWindowAttributes(_currentTargetHwnd, 0, GHOST_OPACITY, NativeMethods.LWA_ALPHA);
 
-                // РЎРѕС…СЂР°РЅСЏРµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РѕРєРЅР° РІ СЃС‚РµРє
+                // Сохраняем состояние окна в стек
                 var windowState = new GhostWindowState
                 {
                     Hwnd = _currentTargetHwnd,
@@ -288,17 +288,17 @@ namespace PeekThrough
                     _ghostWindows.Add(windowState);
                 }
 
-                // Show Tooltip СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј РѕРєРѕРЅ
+                // Show Tooltip с количеством окон
                 ShowTooltip(cursorPos);
                 
-                // Р—РІСѓРє - РІС‹СЃРѕРєРёР№ РґР»СЏ РїРµСЂРІРѕРіРѕ РѕРєРЅР°, РµС‰Рµ РІС‹С€Рµ РґР»СЏ РїРѕСЃР»РµРґСѓСЋС‰РёС…
+                // Звук - высокий для первого окна, еще выше для последующих
                 int beepFreq = _ghostWindows.Count == 1 ? BEEP_FREQUENCY_ACTIVATE : BEEP_FREQUENCY_ADD;
                 NativeMethods.Beep(beepFreq, BEEP_DURATION_MS);
             }
             catch
             {
                 // Fail silently or log
-                // РЈРґР°Р»СЏРµРј РѕРєРЅРѕ РёР· СЃС‚РµРєР° РµСЃР»Рё РѕРЅРѕ Р±С‹Р»Рѕ РґРѕР±Р°РІР»РµРЅРѕ
+                // Удаляем окно из стека если оно было добавлено
                 lock (_lockObject)
                 {
                     _ghostWindows.RemoveAll(w => w.Hwnd == _currentTargetHwnd);
@@ -324,10 +324,10 @@ namespace PeekThrough
             if (windowState.Hwnd == IntPtr.Zero)
                 return;
                 
-            // РџСЂРѕРІРµСЂРєР° РІР°Р»РёРґРЅРѕСЃС‚Рё РѕРєРЅР° РїРµСЂРµРґ РјР°РЅРёРїСѓР»СЏС†РёСЏРјРё
+            // Проверка валидности окна перед манипуляциями
             if (!NativeMethods.IsWindow(windowState.Hwnd))
             {
-                // РћРєРЅРѕ СѓР¶Рµ Р·Р°РєСЂС‹С‚Рѕ, РїСЂРѕРїСѓСЃРєР°РµРј
+                // Окно уже закрыто, пропускаем
                 return;
             }
 
@@ -335,7 +335,7 @@ namespace PeekThrough
             {
                 NativeMethods.SetWindowLongPtr(windowState.Hwnd, NativeMethods.GWL_EXSTYLE, new IntPtr(windowState.OriginalExStyle));
                 
-                // Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёРµ РїСЂРѕР·СЂР°С‡РЅРѕСЃС‚Рё
+                // Восстановление прозрачности
                 if (windowState.WasAlreadyLayered)
                 {
                     NativeMethods.SetLayeredWindowAttributes(windowState.Hwnd, 0, FULL_OPACITY, NativeMethods.LWA_ALPHA);
@@ -343,7 +343,7 @@ namespace PeekThrough
             }
             catch (Exception ex)
             {
-                // Р›РѕРіРёСЂРѕРІР°РЅРёРµ РѕС€РёР±РєРё РІ Debug output
+                // Логирование ошибки в Debug output
                 System.Diagnostics.Debug.WriteLine("RestoreWindow error: " + ex.Message);
             }
         }
@@ -352,15 +352,15 @@ namespace PeekThrough
         {
             lock (_lockObject)
             {
-                // РћР±РЅРѕРІР»СЏРµРј С‚РµРєСЃС‚ СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј РѕРєРѕРЅ
+                // Обновляем текст с количеством окон
                 int count = _ghostWindows.Count;
                 if (count > 1)
                 {
-                    _tooltipLabel.Text = "рџ‘» Ghost Mode x" + count;
+                    _tooltipLabel.Text = "?? Ghost Mode x" + count;
                 }
                 else
                 {
-                    _tooltipLabel.Text = "рџ‘» Ghost Mode";
+                    _tooltipLabel.Text = "?? Ghost Mode";
                 }
             }
             
@@ -403,7 +403,7 @@ namespace PeekThrough
 
             if (disposing)
             {
-                // РћСЃРІРѕР±РѕР¶РґР°РµРј СѓРїСЂР°РІР»СЏРµРјС‹Рµ СЂРµСЃСѓСЂСЃС‹
+                // Освобождаем управляемые ресурсы
                 lock (_lockObject)
                 {
                     if (_timer != null)
@@ -421,7 +421,7 @@ namespace PeekThrough
                 }
             }
 
-            // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІСЃРµ РѕРєРЅР° (СѓРїСЂР°РІР»СЏРµРјРѕРµ Рё РЅРµСѓРїСЂР°РІР»СЏРµРјРѕРµ)
+            // Восстанавливаем все окна (управляемое и неуправляемое)
             RestoreAllWindows();
             
             _disposed = true;

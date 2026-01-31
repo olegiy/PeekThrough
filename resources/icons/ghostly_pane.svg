@@ -1,0 +1,16 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Window -->
+  <rect x="60" y="40" width="120" height="120" rx="8" stroke="#64748b" stroke-width="8" fill="#f1f5f9" />
+  <line x1="60" y1="70" x2="180" y2="70" stroke="#64748b" stroke-width="4" />
+  
+  <!-- Connecting Lines (Metaphor for passing through) -->
+  <line x1="120" y1="100" x2="160" y2="140" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4 4" />
+  
+  <!-- Foreground Ghost Window -->
+  <g opacity="0.9">
+    <rect x="100" y="80" width="120" height="120" rx="8" stroke="#06b6d4" stroke-width="8" fill="rgba(6, 182, 212, 0.2)" />
+    <line x1="100" y1="110" x2="220" y2="110" stroke="#06b6d4" stroke-width="4" />
+    <!-- Glint/Reflection -->
+    <path d="M110 120 L150 120 L130 160 Z" fill="rgba(255, 255, 255, 0.4)" />
+  </g>
+</svg>
