@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -12,9 +13,15 @@ namespace PeekThrough
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
         private GhostLogic _ghostLogic;
+        
+        // Отслеживание нажатых клавиш (кроме Win)
+        private HashSet<int> _pressedKeys = new HashSet<int>();
 
         public event Action OnLWinDown;
         public event Action OnLWinUp;
+        
+        // Событие для уведомления о нажатии другой клавиши перед Win
+        public event Action OnOtherKeyPressedBeforeWin;
 
         public KeyboardHook(GhostLogic ghostLogic)
         {
@@ -53,6 +60,7 @@ namespace PeekThrough
             if (nCode >= 0)
             {
                 int vkCode = Marshal.ReadInt32(lParam);
+                
                 if (vkCode == NativeMethods.VK_LWIN)
                 {
                     // Безопасное копирование события для проверки null
@@ -60,7 +68,23 @@ namespace PeekThrough
                     
                     if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
                     {
-                        handler = OnLWinDown;
+                        // Если нажата другая клавиша до Win - не активируем Ghost Mode
+                        if (_pressedKeys.Count > 0)
+                        {
+                            Action otherKeyHandler = OnOtherKeyPressedBeforeWin;
+                            if (otherKeyHandler != null)
+                            {
+                                _syncContext.Post(state =>
+                                {
+                                    try { otherKeyHandler(); }
+                                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine("OtherKey handler error: " + ex.Message); }
+                                }, null);
+                            }
+                        }
+                        else
+                        {
+                            handler = OnLWinDown;
+                        }
                     }
                     else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
                     {
@@ -78,36 +102,44 @@ namespace PeekThrough
                             }
                             catch (Exception ex)
                             {
-                                // Не прерываем цепочку хуков при ошибке обработчика
                                 System.Diagnostics.Debug.WriteLine("Hook handler error: " + ex.Message);
                             }
                         }, null);
                     }
                     
                     // Подавляем стандартное поведение Win клавиши только если активен Ghost Mode
-                    // При коротком нажатии позволяем Windows обработать событие (открыть меню Пуск)
                     if (_ghostLogic != null && _ghostLogic.ShouldSuppressWinKey)
                     {
                         return (IntPtr)1;
                     }
                 }
-                else if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
+                else
                 {
-                    // Если нажата любая другая клавиша и Ghost Mode активен,
-                    // отключаем Ghost Mode и пропускаем клавишу для стандартной обработки
-                    if (_ghostLogic != null && _ghostLogic.IsGhostModeActive)
+                    // Отслеживание нажатия/отпускания других клавиш
+                    if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
                     {
-                        _syncContext.Post(state =>
+                        _pressedKeys.Add(vkCode);
+                        
+                        // Если нажата любая другая клавиша и Ghost Mode активен,
+                        // отключаем Ghost Mode и пропускаем клавишу для стандартной обработки
+                        if (_ghostLogic != null && _ghostLogic.IsGhostModeActive)
                         {
-                            try
+                            _syncContext.Post(state =>
                             {
-                                _ghostLogic.DeactivateGhostMode();
-                            }
-                            catch (Exception ex)
-                            {
-                                System.Diagnostics.Debug.WriteLine("DeactivateGhostMode error: " + ex.Message);
-                            }
-                        }, null);
+                                try
+                                {
+                                    _ghostLogic.DeactivateGhostMode();
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine("DeactivateGhostMode error: " + ex.Message);
+                                }
+                            }, null);
+                        }
+                    }
+                    else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
+                    {
+                        _pressedKeys.Remove(vkCode);
                     }
                 }
             }

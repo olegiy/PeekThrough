@@ -29,7 +29,7 @@ namespace PeekThrough
         private const int BEEP_FREQUENCY_ACTIVATE = 1000;
         private const int BEEP_FREQUENCY_DEACTIVATE = 500;
         private const int BEEP_DURATION_MS = 50;
-        private const byte GHOST_OPACITY = 80;
+        private const byte GHOST_OPACITY = 38; // ~15% opacity
         private const byte FULL_OPACITY = 255;
         private const int TOOLTIP_WIDTH = 120;
         private const int TOOLTIP_HEIGHT = 30;
@@ -146,6 +146,17 @@ namespace PeekThrough
                 NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
                 _ghostModeActive = false;
                 ShouldSuppressWinKey = false;
+            }
+        }
+        
+        // Публичный метод для блокировки активации Ghost Mode (когда другая клавиша нажата до Win)
+        public void BlockGhostMode()
+        {
+            lock (_lockObject)
+            {
+                // Если уже нажата другая клавиша, отменяем возможность активации Ghost Mode
+                _isLWinDown = false;
+                _timer.Stop();
             }
         }
 

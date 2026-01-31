@@ -28,6 +28,7 @@ namespace PeekThrough
 
                 _hook.OnLWinDown += _logic.OnKeyDown;
                 _hook.OnLWinUp += _logic.OnKeyUp;
+                _hook.OnOtherKeyPressedBeforeWin += _logic.BlockGhostMode;
 
                 // Create a dummy ApplicationContext to run the loop without a main form visible at start
                 Application.Run();
