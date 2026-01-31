@@ -1,46 +1,40 @@
 @echo off
-setlocal enabledelayedexpansion
+echo Building PeekThrough with Debug Logging...
 
-:: Поиск csc.exe в стандартных локациях
-set "CSC_PATH="
+set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
-for %%p in (
-    "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-    "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-) do (
-    if exist %%p (
-        set "CSC_PATH=%%p"
-        goto :found
-    )
+if not exist "%CSC%" (
+    echo ERROR: C# compiler not found at %CSC%
+    echo Please check your .NET Framework installation.
+    pause
+    exit /b 1
 )
 
-:: Альтернативный поиск через where
-where csc.exe >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    for /f "tokens=*" %%a in ('where csc.exe') do (
-        set "CSC_PATH=%%a"
-        goto :found
-    )
+set OUTPUT=PeekThrough.exe
+
+if exist %OUTPUT% (
+    echo Removing old executable...
+    del %OUTPUT%
 )
 
-echo ERROR: csc.exe not found. Please install .NET Framework 4.0 or later.
-exit /b 1
-
-:found
-echo Using compiler: %CSC_PATH%
-
-"%CSC_PATH%" /target:winexe /out:PeekThrough.exe ^
-    /win32icon:resources\icons\icon.ico ^
+echo Compiling...
+"%CSC%" /target:winexe /out:%OUTPUT% ^
     /reference:System.Windows.Forms.dll ^
     /reference:System.Drawing.dll ^
-    /optimize ^
-    /debug:pdbonly ^
-    Program.cs NativeMethods.cs KeyboardHook.cs GhostLogic.cs
+    /debug ^
+    Program.cs NativeMethods.cs KeyboardHook.cs GhostLogic.cs DebugLogger.cs ^
+    2> compile_errors.txt
 
-if %ERRORLEVEL% EQU 0 (
-    echo [SUCCESS] Build completed: PeekThrough.exe
+if errorlevel 1 (
+    echo.
+    echo COMPILATION FAILED!
+    echo.
+    type compile_errors.txt
+    pause
+    exit /b 1
 ) else (
-    echo [FAILED] Build failed with error code %ERRORLEVEL%
+    echo.
+    echo Build successful: %OUTPUT%
+    echo.
+    if exist compile_errors.txt del compile_errors.txt
 )
-
-endlocal

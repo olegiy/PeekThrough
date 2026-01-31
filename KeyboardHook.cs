@@ -29,6 +29,7 @@ namespace PeekThrough
             _proc = HookCallback;
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
             _hookID = SetHook(_proc);
+            DebugLogger.Log(string.Format("KeyboardHook initialized, hook ID: {0}", _hookID));
         }
 
         public void Dispose()
@@ -37,6 +38,7 @@ namespace PeekThrough
             {
                 if (_hookID != IntPtr.Zero)
                 {
+                    DebugLogger.Log("KeyboardHook.Dispose: Unhooking keyboard hook");
                     NativeMethods.UnhookWindowsHookEx(_hookID);
                     _hookID = IntPtr.Zero;
                 }
@@ -63,6 +65,8 @@ namespace PeekThrough
                 
                 if (vkCode == NativeMethods.VK_LWIN)
                 {
+                    DebugLogger.Log(string.Format("HookCallback: LWin detected, wParam={0}", wParam));
+                    
                     // Безопасное копирование события для проверки null
                     Action handler = null;
                     
@@ -71,13 +75,14 @@ namespace PeekThrough
                         // Если нажата другая клавиша до Win - не активируем Ghost Mode
                         if (_pressedKeys.Count > 0)
                         {
+                            DebugLogger.Log(string.Format("HookCallback: Other keys pressed before Win ({0}), blocking Ghost Mode", _pressedKeys.Count));
                             Action otherKeyHandler = OnOtherKeyPressedBeforeWin;
                             if (otherKeyHandler != null)
                             {
                                 _syncContext.Post(state =>
                                 {
                                     try { otherKeyHandler(); }
-                                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine("OtherKey handler error: " + ex.Message); }
+                                    catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error: {0}", ex.Message)); }
                                 }, null);
                             }
                         }
@@ -102,14 +107,18 @@ namespace PeekThrough
                             }
                             catch (Exception ex)
                             {
-                                System.Diagnostics.Debug.WriteLine("Hook handler error: " + ex.Message);
+                                DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message));
                             }
                         }, null);
                     }
                     
                     // Подавляем стандартное поведение Win клавиши только если активен Ghost Mode
-                    if (_ghostLogic != null && _ghostLogic.ShouldSuppressWinKey)
+                    bool shouldSuppress = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
+                    DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppress));
+                    
+                    if (shouldSuppress)
                     {
+                        DebugLogger.Log("HookCallback: SUPPRESSING Win key event!");
                         return (IntPtr)1;
                     }
                 }
@@ -119,11 +128,13 @@ namespace PeekThrough
                     if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
                     {
                         _pressedKeys.Add(vkCode);
+                        DebugLogger.Log(string.Format("HookCallback: Other key DOWN, vkCode={0}, total pressed: {1}", vkCode, _pressedKeys.Count));
                         
                         // Если нажата любая другая клавиша и Ghost Mode активен,
                         // отключаем Ghost Mode и пропускаем клавишу для стандартной обработки
                         if (_ghostLogic != null && _ghostLogic.IsGhostModeActive)
                         {
+                            DebugLogger.Log("HookCallback: Other key pressed while Ghost Mode active, deactivating");
                             _syncContext.Post(state =>
                             {
                                 try
@@ -132,7 +143,7 @@ namespace PeekThrough
                                 }
                                 catch (Exception ex)
                                 {
-                                    System.Diagnostics.Debug.WriteLine("DeactivateGhostMode error: " + ex.Message);
+                                    DebugLogger.Log(string.Format("DeactivateGhostMode error: {0}", ex.Message));
                                 }
                             }, null);
                         }
@@ -140,6 +151,7 @@ namespace PeekThrough
                     else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
                     {
                         _pressedKeys.Remove(vkCode);
+                        DebugLogger.Log(string.Format("HookCallback: Other key UP, vkCode={0}, remaining: {1}", vkCode, _pressedKeys.Count));
                     }
                 }
             }
