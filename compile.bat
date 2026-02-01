@@ -19,6 +19,7 @@ if exist %OUTPUT% (
 
 echo Compiling...
 "%CSC%" /target:winexe /out:%OUTPUT% ^
+    /win32icon:resources\icons\icon.ico ^
     /reference:System.Windows.Forms.dll ^
     /reference:System.Drawing.dll ^
     /debug ^
