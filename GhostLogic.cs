@@ -417,33 +417,32 @@ namespace PeekThrough
 
         protected virtual void Dispose(bool disposing)
         {
-            if (_disposed)
-                return;
+            lock (_lockObject)
+            {
+                if (_disposed)
+                    return;
+                _disposed = true;
+            }
 
             if (disposing)
             {
-                // Освобождаем управляемые ресурсы
+                Timer timerToDispose = null;
+                Form formToDispose = null;
+
                 lock (_lockObject)
                 {
-                    if (_timer != null)
-                    {
-                        _timer.Stop();
-                        _timer.Dispose();
-                        _timer = null;
-                    }
-                    
-                    if (_tooltipForm != null)
-                    {
-                        _tooltipForm.Dispose();
-                        _tooltipForm = null;
-                    }
+                    timerToDispose = _timer;
+                    _timer = null;
+                    formToDispose = _tooltipForm;
+                    _tooltipForm = null;
                 }
-            }
 
-            // Восстанавливаем все окна (потокобезопасно в финализаторе)
-            RestoreAllWindows();
-            
-            _disposed = true;
+                timerToDispose?.Stop();
+                timerToDispose?.Dispose();
+                formToDispose?.Dispose();
+
+                RestoreAllWindows();
+            }
         }
 
         ~GhostLogic()

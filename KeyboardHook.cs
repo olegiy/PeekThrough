@@ -34,16 +34,24 @@ namespace PeekThrough
 
         public void Dispose()
         {
-            if (!_disposed)
+            IntPtr hookToDispose = IntPtr.Zero;
+
+            lock (this)
             {
-                if (_hookID != IntPtr.Zero)
+                if (!_disposed && _hookID != IntPtr.Zero)
                 {
-                    DebugLogger.Log("KeyboardHook.Dispose: Unhooking keyboard hook");
-                    NativeMethods.UnhookWindowsHookEx(_hookID);
+                    hookToDispose = _hookID;
                     _hookID = IntPtr.Zero;
+                    _disposed = true;
                 }
-                _disposed = true;
             }
+
+            if (hookToDispose != IntPtr.Zero)
+            {
+                DebugLogger.Log("KeyboardHook.Dispose: Unhooking keyboard hook");
+                NativeMethods.UnhookWindowsHookEx(hookToDispose);
+            }
+
             GC.SuppressFinalize(this);
         }
 
