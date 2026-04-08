@@ -18,7 +18,18 @@ namespace PeekThrough
     internal class GhostLogic : IDisposable
     {
         // Публичное свойство для проверки, нужно ли подавлять стандартное поведение Win
-        public bool ShouldSuppressWinKey { get; private set; }
+        public bool ShouldSuppressWinKey
+        {
+            get
+            {
+                lock (_lockObject)
+                {
+                    // Всегда подавляем Win когда Ghost Mode активен
+                    // ИЛИ когда мы в процессе нажатия (чтобы Пуск не открывался при активации)
+                    return _ghostModeActive || _isLWinDown;
+                }
+            }
+        }
         
         // Публичное свойство для проверки, активен ли Ghost Mode
         public bool IsGhostModeActive
@@ -53,9 +64,12 @@ namespace PeekThrough
         
         // Список окон в Ghost Mode
         private List<GhostWindowState> _ghostWindows = new List<GhostWindowState>();
-        
+
         // Текущее целевое окно (для добавления)
         private IntPtr _currentTargetHwnd = IntPtr.Zero;
+
+        // Handle окна, которое сейчас под курсором (для отслеживания изменений)
+        private IntPtr _lastActivatedHwnd = IntPtr.Zero;
 
         private Form _tooltipForm;
         private Label _tooltipLabel;
@@ -114,7 +128,7 @@ namespace PeekThrough
             DebugLogger.Log("=== OnKeyDown START ===");
             lock (_lockObject)
             {
-                if (_isLWinDown) 
+                if (_isLWinDown)
                 {
                     DebugLogger.Log("OnKeyDown: _isLWinDown already true, returning");
                     return;
@@ -122,19 +136,9 @@ namespace PeekThrough
                 _isLWinDown = true;
                 _timerFired = false; // Сбрасываем флаг таймера
                 DebugLogger.LogState("OnKeyDown", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
-                
-                // Если Ghost Mode уже активен, то перезапускаем таймер для добавления окна
-                if (_ghostModeActive)
-                {
-                    // Перезапускаем таймер для добавления текущего окна под курсором
-                    _timer.Stop();
-                    _timer.Start();
-                }
-                else
-                {
-                    // Запускаем таймер
-                    _timer.Start();
-                }
+
+                // Запускаем таймер
+                _timer.Start();
             }
         }
 
@@ -144,7 +148,7 @@ namespace PeekThrough
             lock (_lockObject)
             {
                 DebugLogger.LogState("OnKeyUp ENTER", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
-                
+
                 _isLWinDown = false;
                 _timer.Stop();
 
@@ -153,15 +157,10 @@ namespace PeekThrough
                     if (_timerFired)
                     {
                         // Таймер сработал - длинное нажатие
-                        // Добавляем окно под курсором к Ghost Mode
-                        DebugLogger.Log("OnKeyUp: Timer fired, adding window to Ghost Mode");
+                        // Ghost Mode уже активирован в OnTimerTick, просто скрываем тултип
+                        DebugLogger.Log("OnKeyUp: Timer fired, Ghost Mode already active");
                         HideTooltip();
-                        _timerFired = false; // Сбрасываем для следующего цикла
-                        
-                        // БАГФИКС: Сбрасываем ShouldSuppressWinKey после длинного нажатия!
-                        // Это критически важно, чтобы Windows получила событие KEYUP
-                        ShouldSuppressWinKey = false;
-                        DebugLogger.Log("OnKeyUp: FIXED - ShouldSuppressWinKey set to FALSE after long press");
+                        _timerFired = false;
                     }
                     else
                     {
@@ -171,19 +170,12 @@ namespace PeekThrough
                         HideTooltip();
                         NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
                         _ghostModeActive = false;
-                        ShouldSuppressWinKey = false;
                         _ghostWindows.Clear();
                         _currentTargetHwnd = IntPtr.Zero;
+                        _lastActivatedHwnd = IntPtr.Zero;
                     }
                 }
-                else
-                {
-                    // Ghost Mode не активен и был короткий клик
-                    // Windows должен обработать обычное нажатие кнопки
-                    DebugLogger.Log("OnKeyUp: Ghost mode not active, allowing Windows to handle");
-                    ShouldSuppressWinKey = false;
-                }
-                
+
                 DebugLogger.LogState("OnKeyUp EXIT", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
             }
         }
@@ -194,28 +186,25 @@ namespace PeekThrough
             DebugLogger.Log("=== DeactivateGhostMode START ===");
             lock (_lockObject)
             {
-                if (!_ghostModeActive) 
+                if (!_ghostModeActive)
                 {
                     DebugLogger.Log("DeactivateGhostMode: Ghost mode not active, returning");
                     return;
                 }
-                
+
                 DebugLogger.LogState("DeactivateGhostMode", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
-                
+
                 _isLWinDown = false;
                 _timerFired = false;
                 _timer.Stop();
-                
+
                 // Deactivate Ghost Mode - восстанавливаем все окна
                 RestoreAllWindows();
                 HideTooltip();
                 NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
                 _ghostModeActive = false;
-                ShouldSuppressWinKey = false;
                 _ghostWindows.Clear();
                 _currentTargetHwnd = IntPtr.Zero;
-                
-                DebugLogger.Log("DeactivateGhostMode: Completed");
             }
         }
         
@@ -259,14 +248,14 @@ namespace PeekThrough
                 DebugLogger.Log("ActivateGhostMode: Failed to get cursor position");
                 return;
             }
-                
+
             IntPtr hwnd = NativeMethods.WindowFromPoint(cursorPos);
             if (hwnd == IntPtr.Zero)
             {
                 DebugLogger.Log("ActivateGhostMode: WindowFromPoint returned zero");
                 return;
             }
-                
+
             // Get the root window (ancestor) because we might be hovering a child control
             hwnd = NativeMethods.GetAncestor(hwnd, NativeMethods.GA_ROOT);
             DebugLogger.Log(string.Format("ActivateGhostMode: Root window handle: {0}", hwnd));
@@ -279,34 +268,35 @@ namespace PeekThrough
                 DebugLogger.Log(string.Format("ActivateGhostMode: Window class: {0}", cls));
                 if (IgnoredWindowClasses.Contains(cls))
                 {
-                    // Игнорируем системные окна, но оставляем Ghost Mode активным если уже есть окна
-                    lock (_lockObject)
-                    {
-                        if (_ghostWindows.Count > 0)
-                            _ghostModeActive = true;
-                    }
                     DebugLogger.Log("ActivateGhostMode: Ignored system window");
                     return;
                 }
             }
 
+            // Проверяем, не то ли это же окно, что уже активировано
+            if (hwnd == _lastActivatedHwnd && _ghostModeActive)
+            {
+                DebugLogger.Log("ActivateGhostMode: Same window, just showing tooltip");
+                ShowTooltip(cursorPos);
+                return;
+            }
+
             lock (_lockObject)
             {
-                // Проверяем, не добавлено ли это окно уже
-                foreach (var existing in _ghostWindows)
+                // Если уже есть окно в Ghost Mode - восстанавливаем его перед активацией нового
+                if (_ghostWindows.Count > 0)
                 {
-                    if (existing.Hwnd == hwnd)
+                    DebugLogger.Log("ActivateGhostMode: Restoring previous window before activating new one");
+                    foreach (var existing in _ghostWindows)
                     {
-                        // Окно уже в списке, просто показываем тултип
-                        DebugLogger.Log("ActivateGhostMode: Window already in ghost list");
-                        ShowTooltip(cursorPos);
-                        return;
+                        RestoreSingleWindow(existing);
                     }
+                    _ghostWindows.Clear();
                 }
-                
+
                 _currentTargetHwnd = hwnd;
+                _lastActivatedHwnd = hwnd;
                 _ghostModeActive = true;
-                ShouldSuppressWinKey = true;
                 DebugLogger.LogState("ActivateGhostMode - set active", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
             }
 
@@ -328,7 +318,7 @@ namespace PeekThrough
                     OriginalExStyle = originalExStyle,
                     WasAlreadyLayered = wasAlreadyLayered
                 };
-                
+
                 lock (_lockObject)
                 {
                     _ghostWindows.Add(windowState);
@@ -336,16 +326,13 @@ namespace PeekThrough
 
                 // Show Tooltip в позиции курсора
                 ShowTooltip(cursorPos);
-                
-                // Звук - разный для первого и последующих окон
-                int beepFreq = _ghostWindows.Count == 1 ? BEEP_FREQUENCY_ACTIVATE : BEEP_FREQUENCY_ADD;
-                NativeMethods.Beep(beepFreq, BEEP_DURATION_MS);
-                DebugLogger.Log(string.Format("ActivateGhostMode: Window added, total ghost windows: {0}", _ghostWindows.Count));
+
+                // Звук активации
+                NativeMethods.Beep(BEEP_FREQUENCY_ACTIVATE, BEEP_DURATION_MS);
+                DebugLogger.Log("ActivateGhostMode: Window activated as single ghost window");
             }
             catch (Exception ex)
             {
-                // Fail silently or log
-                // Удаляем окно из списка если произошла ошибка
                 DebugLogger.Log(string.Format("ActivateGhostMode ERROR: {0}", ex.Message));
                 lock (_lockObject)
                 {
@@ -404,18 +391,9 @@ namespace PeekThrough
         {
             lock (_lockObject)
             {
-                // Обновляем текст с количеством окон
-                int count = _ghostWindows.Count;
-                if (count > 1)
-                {
-                    _tooltipLabel.Text = string.Format("Ghost Mode x{0}", count);
-                }
-                else
-                {
-                    _tooltipLabel.Text = "Ghost Mode";
-                }
+                _tooltipLabel.Text = "Ghost Mode";
             }
-            
+
             _tooltipForm.Location = new Point(location.X + TOOLTIP_OFFSET_X, location.Y + TOOLTIP_OFFSET_Y);
             if (!_tooltipForm.Visible)
                 _tooltipForm.Show();
@@ -424,22 +402,6 @@ namespace PeekThrough
         private void HideTooltip()
         {
              _tooltipForm.Hide();
-        }
-
-        private void SendLWinClick()
-        {
-            // Simulate LWin Down and Up
-            NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
-
-            inputs[0].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[0].U.ki.wVk = NativeMethods.VK_LWIN;
-            inputs[0].U.ki.dwFlags = 0; // KeyDown
-
-            inputs[1].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[1].U.ki.wVk = NativeMethods.VK_LWIN;
-            inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
-
-            NativeMethods.SendInput(2, inputs, NativeMethods.INPUT.Size);
         }
 
         public void Dispose()
