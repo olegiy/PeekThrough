@@ -437,9 +437,9 @@ namespace PeekThrough
                     _tooltipForm = null;
                 }
 
-                timerToDispose?.Stop();
-                timerToDispose?.Dispose();
-                formToDispose?.Dispose();
+            if (timerToDispose != null) timerToDispose.Stop();
+            if (timerToDispose != null) timerToDispose.Dispose();
+            if (formToDispose != null) formToDispose.Dispose();
 
                 RestoreAllWindows();
             }
