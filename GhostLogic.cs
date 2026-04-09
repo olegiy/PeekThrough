@@ -397,28 +397,29 @@ namespace PeekThrough
 
         private void SendWinReleaseWithCtrl()
         {
-            DebugLogger.Log("SendWinReleaseWithCtrl: Pressing Ctrl, releasing Ctrl, then releasing Win");
+            DebugLogger.Log("SendWinReleaseWithCtrl: Pressing Ctrl, releasing Win, then releasing Ctrl");
 
-            // Последовательность: Ctrl down -> Ctrl up -> Win up
+            // Последовательность: Ctrl down -> Win up -> Ctrl up
+            // Важно: Win отпускается пока Ctrl ещё нажат, чтобы предотвратить открытие меню Пуск
             NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[3];
             
-            // Нажимаем Ctrl
+            // 1. Нажимаем Ctrl
             inputs[0].type = NativeMethods.INPUT_KEYBOARD;
             inputs[0].U.ki.wVk = NativeMethods.VK_CONTROL;
             inputs[0].U.ki.dwFlags = 0;
             inputs[0].U.ki.time = 0;
             inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
 
-            // Отпускаем Ctrl
+            // 2. Отпускаем Win (пока Ctrl ещё нажат!)
             inputs[1].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[1].U.ki.wVk = NativeMethods.VK_CONTROL;
+            inputs[1].U.ki.wVk = NativeMethods.VK_LWIN;
             inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[1].U.ki.time = 0;
             inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
 
-            // Отпускаем Win
+            // 3. Отпускаем Ctrl
             inputs[2].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[2].U.ki.wVk = NativeMethods.VK_LWIN;
+            inputs[2].U.ki.wVk = NativeMethods.VK_CONTROL;
             inputs[2].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[2].U.ki.time = 0;
             inputs[2].U.ki.dwExtraInfo = IntPtr.Zero;
