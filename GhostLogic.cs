@@ -20,7 +20,7 @@ namespace PeekThrough
         // Тип активации Ghost Mode
         public enum ActivationType
         {
-            Keyboard, // Активация с помощью клавиатуры (Win)
+            Keyboard, // Активация с помощью клавиатуры (Win или произвольная клавиша)
             Mouse     // Активация с помощью мыши
         }
         
@@ -61,7 +61,7 @@ namespace PeekThrough
             }
         }
 
-        // Публичное свойство для проверки, нажата ли клавиша Win
+        // Публичное свойство для проверки, нажата ли клавиша активации
         public bool IsLWinPressed
         {
             get
@@ -72,6 +72,9 @@ namespace PeekThrough
                 }
             }
         }
+        
+        // Публичное свойство для получения кода клавиши активации
+        public int ActivationKeyCode { get; set; }
         
         // Публичное свойство для получения типа активации
         public ActivationType CurrentActivationType
@@ -133,6 +136,7 @@ namespace PeekThrough
         public GhostLogic(ActivationType activationType = ActivationType.Keyboard)
         {
             _activationType = activationType;
+            ActivationKeyCode = NativeMethods.VK_LWIN; // По умолчанию Win
             _timer = new Timer();
             _timer.Interval = GHOST_MODE_ACTIVATION_DELAY_MS;
             _timer.Tick += OnTimerTick;
@@ -184,6 +188,21 @@ namespace PeekThrough
             }
             
             DebugLogger.Log("=== OnKeyDown START ===");
+            
+            // Проверяем, открыто ли меню Пуск, и если да — закрываем его
+            if (IsStartMenuOpen())
+            {
+                DebugLogger.Log("OnKeyDown: Start menu is open, closing it");
+                CloseStartMenu();
+                // Не запускаем таймер Ghost Mode — просто закрываем меню
+                lock (_lockObject)
+                {
+                    _isLWinDown = true;
+                    _timerFired = false;
+                }
+                return;
+            }
+            
             lock (_lockObject)
             {
                 if (_isLWinDown)
@@ -351,6 +370,89 @@ namespace PeekThrough
             }
         }
 
+        // Проверка, открыто ли меню Пуск (Start Menu)
+        // Надёжный способ: проверяем foreground window — класс + заголовок
+        private bool IsStartMenuOpen()
+        {
+            try
+            {
+                IntPtr foregroundHwnd = NativeMethods.GetForegroundWindow();
+                if (foregroundHwnd == IntPtr.Zero)
+                    return false;
+                
+                var className = new StringBuilder(256);
+                if (NativeMethods.GetClassName(foregroundHwnd, className, className.Capacity) <= 0)
+                    return false;
+                
+                string cls = className.ToString();
+                DebugLogger.Log(string.Format("IsStartMenuOpen: Foreground window class: {0}", cls));
+                
+                // Windows 10/11: Start menu — CoreWindow с заголовком "Start" / "Пуск" и т.д.
+                if (cls == "Windows.UI.Core.CoreWindow")
+                {
+                    // Получаем заголовок окна для отличия Start menu от UWP-приложений
+                    int titleLength = NativeMethods.GetWindowTextLength(foregroundHwnd);
+                    if (titleLength > 0)
+                    {
+                        var titleBuilder = new StringBuilder(titleLength + 1);
+                        NativeMethods.GetWindowText(foregroundHwnd, titleBuilder, titleBuilder.Capacity);
+                        string title = titleBuilder.ToString();
+                        DebugLogger.Log(string.Format("IsStartMenuOpen: CoreWindow title: '{0}'", title));
+                        
+                        // Start menu заголовки в разных локализациях
+                        if (title == "Start" || title == "Пуск" ||
+                            title == "Inicio" || title == "Démarrer" || title == "Startmenü" ||
+                            title == "スタート" || title == "开始")
+                        {
+                            DebugLogger.Log("IsStartMenuOpen: Start menu detected as foreground");
+                            return true;
+                        }
+                    }
+                }
+                
+                // Windows 11: Start menu может использовать класс "StartMenuExperienceHost"
+                // или "Windows.Internal.Shell.TabProxyWindow" в новых билдах
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Log(string.Format("IsStartMenuOpen ERROR: {0}", ex.Message));
+            }
+            
+            return false;
+        }
+        
+        // Закрытие меню Пуск через эмуляцию нажатия Escape
+        private void CloseStartMenu()
+        {
+            try
+            {
+                DebugLogger.Log("CloseStartMenu: Sending Escape key to close Start menu");
+                
+                NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
+                
+                // 1. Нажимаем Escape
+                inputs[0].type = NativeMethods.INPUT_KEYBOARD;
+                inputs[0].U.ki.wVk = NativeMethods.VK_ESCAPE;
+                inputs[0].U.ki.dwFlags = 0;
+                inputs[0].U.ki.time = 0;
+                inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
+                
+                // 2. Отпускаем Escape
+                inputs[1].type = NativeMethods.INPUT_KEYBOARD;
+                inputs[1].U.ki.wVk = NativeMethods.VK_ESCAPE;
+                inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
+                inputs[1].U.ki.time = 0;
+                inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
+                
+                NativeMethods.SendInput(2, inputs, NativeMethods.INPUT.Size);
+                DebugLogger.Log("CloseStartMenu: Escape key sent");
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.Log(string.Format("CloseStartMenu ERROR: {0}", ex.Message));
+            }
+        }
+
         private void OnTimerTick(object sender, EventArgs e)
         {
             DebugLogger.Log("=== OnTimerTick ===");
@@ -391,35 +493,35 @@ namespace PeekThrough
                 _suppressWinKey = false;
             }
 
-            // Эмулируем Win+Ctrl комбинацию для предотвращения меню Пуск
-            SendWinReleaseWithCtrl();
+            // Эмулируем Esc при нажатом Win для предотвращения меню Пуск
+            SendEscWinReleaseToPreventStartMenu();
         }
 
-        private void SendWinReleaseWithCtrl()
+        private void SendEscWinReleaseToPreventStartMenu()
         {
-            DebugLogger.Log("SendWinReleaseWithCtrl: Pressing Ctrl, releasing Win, then releasing Ctrl");
+            DebugLogger.Log("SendEscWinReleaseToPreventStartMenu: Pressing Esc while activation key is held, then releasing");
 
-            // Последовательность: Ctrl down -> Win up -> Ctrl up
-            // Важно: Win отпускается пока Ctrl ещё нажат, чтобы предотвратить открытие меню Пуск
+            // Последовательность: Esc down -> Esc up -> activation key up
+            // Кратковременное нажатие Esc при нажатой клавише активации прерывает нежелательное поведение
             NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[3];
             
-            // 1. Нажимаем Ctrl
+            // 1. Нажимаем Esc
             inputs[0].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[0].U.ki.wVk = NativeMethods.VK_CONTROL;
+            inputs[0].U.ki.wVk = NativeMethods.VK_ESCAPE;
             inputs[0].U.ki.dwFlags = 0;
             inputs[0].U.ki.time = 0;
             inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
 
-            // 2. Отпускаем Win (пока Ctrl ещё нажат!)
+            // 2. Отпускаем Esc
             inputs[1].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[1].U.ki.wVk = NativeMethods.VK_LWIN;
+            inputs[1].U.ki.wVk = NativeMethods.VK_ESCAPE;
             inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[1].U.ki.time = 0;
             inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
 
-            // 3. Отпускаем Ctrl
+            // 3. Отпускаем клавишу активации
             inputs[2].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[2].U.ki.wVk = NativeMethods.VK_CONTROL;
+            inputs[2].U.ki.wVk = (ushort)ActivationKeyCode;
             inputs[2].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[2].U.ki.time = 0;
             inputs[2].U.ki.dwExtraInfo = IntPtr.Zero;
