@@ -252,9 +252,29 @@ namespace PeekThrough
 
                 if (_ghostModeActive)
                 {
-                    // Toggle mode: releasing Win does NOT deactivate Ghost Mode
-                    // Deactivation happens via: long press Win again (timer fires) or Escape key
-                    DebugLogger.Log("OnKeyUp: Ghost Mode active on release - staying active (toggle mode)");
+                    // Toggle mode: short Win press deactivates Ghost Mode
+                    if (_timerFired)
+                    {
+                        // Long press - Ghost Mode was just activated, keep it active
+                        DebugLogger.Log("OnKeyUp: Ghost Mode just activated by long press - staying active");
+                    }
+                    else
+                    {
+                        // Short press - deactivate Ghost Mode
+                        DebugLogger.Log("OnKeyUp: Short Win press while Ghost Mode active - deactivating");
+                        RestoreAllWindows();
+                        HideTooltip();
+                        NativeMethods.Beep(BEEP_FREQUENCY_DEACTIVATE, BEEP_DURATION_MS);
+                        _ghostModeActive = false;
+                        _ghostWindows.Clear();
+                        _currentTargetHwnd = IntPtr.Zero;
+                        _lastActivatedHwnd = IntPtr.Zero;
+
+                        // Включаем подавление Win на короткое время после деактивации
+                        _suppressWinKey = true;
+                        _suppressWinTimer.Start();
+                        DebugLogger.Log("OnKeyUp: Started Win suppression timer");
+                    }
                 }
                 else if (!_timerFired)
                 {
@@ -460,18 +480,10 @@ namespace PeekThrough
                 if (shouldActivate)
                 {
                     _timerFired = true; // Отмечаем что было длинное нажатие (таймер сработал)
-                    if (_ghostModeActive)
-                    {
-                        // Toggle off
-                        DebugLogger.LogState("OnTimerTick - toggling OFF", _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
-                        DeactivateGhostMode();
-                    }
-                    else
-                    {
-                        // Activate
-                        DebugLogger.LogState(string.Format("OnTimerTick - activating ({0})", _activationType), _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
-                        ActivateGhostMode();
-                    }
+                    // Toggle mode: timer only activates Ghost Mode, never deactivates
+                    // Deactivation happens via short Win press (OnKeyUp when !_timerFired)
+                    DebugLogger.LogState(string.Format("OnTimerTick - activating ({0})", _activationType), _isLWinDown, _ghostModeActive, ShouldSuppressWinKey, _timerFired);
+                    ActivateGhostMode();
                 }
                 else
                 {
