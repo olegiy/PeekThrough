@@ -42,13 +42,8 @@ namespace PeekThrough.Models
 
         public ProfileSettings()
         {
-            List = new List<ProfileData>
-            {
-                new ProfileData { Id = "min", Name = "Minimum", Opacity = 38 },
-                new ProfileData { Id = "med", Name = "Medium", Opacity = 128 },
-                new ProfileData { Id = "max", Name = "Maximum", Opacity = 204 }
-            };
-            ActiveId = "min";
+            List = OpacityProfilePresets.CreateDefaultProfileDataList();
+            ActiveId = OpacityProfilePresets.DefaultActiveProfileId;
         }
     }
 

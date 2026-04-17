@@ -35,12 +35,7 @@ namespace PeekThrough
             // Default profiles if none provided
             if (profiles == null)
             {
-                _profiles = new List<Profile>
-                {
-                    new Profile("min", "Minimum", 38),
-                    new Profile("med", "Medium", 128),
-                    new Profile("max", "Maximum", 204)
-                };
+                _profiles = OpacityProfilePresets.CreateDefaultProfiles();
             }
             else
             {

@@ -164,7 +164,7 @@ namespace PeekThrough
             _controller.Dispose();
 
             // Create new controller with new activation type
-            var profileManager = new ProfileManager(_settings.Profiles.ActiveId);
+            var profileManager = CreateProfileManagerFromSettings();
             _controller = new GhostController(type, profileManager);
             _controller.ActivationKeyCode = _settings.Activation.KeyCode;
 
@@ -194,7 +194,7 @@ namespace PeekThrough
             UnsubscribeHookEvents();
             _controller.Dispose();
 
-            var profileManager = new ProfileManager(_settings.Profiles.ActiveId);
+            var profileManager = CreateProfileManagerFromSettings();
             var activationType = _settings.Activation.Type == "mouse"
                 ? ActivationInputType.Mouse
                 : ActivationInputType.Keyboard;
@@ -295,6 +295,15 @@ namespace PeekThrough
             if (KeyDisplayNames.TryGetValue(vkCode, out name))
                 return name;
             return string.Format("Key 0x{0:X2}", vkCode);
+        }
+
+        private static ProfileManager CreateProfileManagerFromSettings()
+        {
+            var profiles = _settings.Profiles.List
+                .Select(p => new Profile(p.Id, p.Name, p.Opacity))
+                .ToList();
+
+            return new ProfileManager(_settings.Profiles.ActiveId, profiles);
         }
     }
 }

@@ -52,9 +52,15 @@ namespace PeekThrough
                 }
 
                 // Parse v2 JSON format
-                var settings = _serializer.Deserialize<Settings>(content);
+                var settings = _serializer.Deserialize<Settings>(content) ?? CreateDefaultSettings();
+                bool settingsChanged = NormalizeProfiles(settings);
                 DebugLogger.Log(string.Format("SettingsManager: Loaded v2 settings, active profile: {0}", settings.Profiles.ActiveId));
-                return settings ?? CreateDefaultSettings();
+                if (settingsChanged)
+                {
+                    SaveSettings(settings);
+                    DebugLogger.Log("SettingsManager: Updated opacity profile presets");
+                }
+                return settings;
             }
             catch (Exception ex)
             {
@@ -133,6 +139,52 @@ namespace PeekThrough
         private Settings CreateDefaultSettings()
         {
             return new Settings();
+        }
+
+        private bool NormalizeProfiles(Settings settings)
+        {
+            if (settings == null)
+                return false;
+
+            if (settings.Profiles == null)
+            {
+                settings.Profiles = new ProfileSettings();
+                return true;
+            }
+
+            if (settings.Profiles.List == null || settings.Profiles.List.Count == 0)
+            {
+                settings.Profiles.List = OpacityProfilePresets.CreateDefaultProfileDataList();
+                settings.Profiles.ActiveId = OpacityProfilePresets.DefaultActiveProfileId;
+                return true;
+            }
+
+            bool isLegacyDefaultList =
+                settings.Profiles.List.Count == 3 &&
+                settings.Profiles.List.Any(p => p.Id == "min" && p.Opacity == 38) &&
+                settings.Profiles.List.Any(p => p.Id == "med" && p.Opacity == 128) &&
+                settings.Profiles.List.Any(p => p.Id == "max" && p.Opacity == 204);
+
+            if (isLegacyDefaultList)
+            {
+                byte activeOpacity = settings.Profiles.List
+                    .Where(p => p.Id == settings.Profiles.ActiveId)
+                    .Select(p => p.Opacity)
+                    .DefaultIfEmpty(settings.Profiles.List[0].Opacity)
+                    .First();
+
+                settings.Profiles.List = OpacityProfilePresets.CreateDefaultProfileDataList();
+                settings.Profiles.ActiveId = OpacityProfilePresets.GetClosestProfileId(activeOpacity);
+                return true;
+            }
+
+            if (!settings.Profiles.List.Any(p => p.Id == settings.Profiles.ActiveId))
+            {
+                settings.Profiles.ActiveId = settings.Profiles.List[0].Id;
+                return true;
+            }
+
+            return false;
         }
     }
 }
