@@ -14,13 +14,14 @@ When activated, the window under your cursor becomes semi-transparent and "click
 
 ## 🚀 Key Features
 
-- **Global Hotkey Integration**: Uses the native Windows key (`Win`) for a seamless experience.
+- **Multiple Activation Methods**: Choose between keyboard (`Win` key) or mouse button (middle, right, X1, X2) for activation.
 - **Dynamic Transparency**: Instantly toggles 70% transparency (customizable in source).
 - **Click-Through Functionality**: Mouse clicks pass through the "ghosted" window to the applications beneath.
-- **Multi-Window Support**: Hold `Win` and hover over multiple windows to "ghost" them sequentially.
+- **Multi-Window Support**: Hold activation button and hover over multiple windows to "ghost" them sequentially.
 - **Intelligent Filtering**: Automatically ignores system elements like the Taskbar and Desktop.
 - **Minimal Footprint**: Lightweight C# implementation with zero idle CPU usage.
 - **Audio-Visual Feedback**: Professional sound signals and on-screen tooltips indicate mode status.
+- **Customizable Settings**: Change activation method through system tray menu.
 
 ## 🛠️ Technical Stack
 
@@ -35,13 +36,16 @@ When activated, the window under your cursor becomes semi-transparent and "click
 
 Ghost Window is designed to stay out of your way until you need it.
 
-1. **Activate Ghost Mode**: Press and hold the **Windows Key (`LWin`)** for more than 0.5 seconds while hovering over a window.
+1. **Choose Activation Method**: Right-click the system tray icon and select your preferred activation method:
+   - **Keyboard**: Hold the **Windows Key (`LWin`)** for more than 1 second while hovering over a window.
+   - **Mouse**: Hold the selected mouse button (middle, right, X1, or X2) for more than 1 second while hovering over a window.
+2. **Activate Ghost Mode**:
    - The window will become transparent.
    - A tooltip `👻 Ghost Mode` will appear.
    - You will hear a confirmation beep.
-2. **Interact Through Windows**: While holding `Win`, you can click on any content visible *behind* the ghosted window.
-3. **Deactivate**: Simply release the **Windows Key**. The window(s) will instantly return to their original state.
-4. **Standard Windows Key**: A quick tap of the `Win` key (less than 0.5s) still opens the Start Menu as usual.
+3. **Interact Through Windows**: While holding the activation button, you can click on any content visible *behind* the ghosted window.
+4. **Deactivate**: Simply release the activation button. The window(s) will instantly return to their original state.
+5. **Switch Activation Method**: Right-click the system tray icon, select "Change Activation Method" and choose your preferred activation method.
 
 ## 📥 Installation
 

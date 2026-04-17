@@ -23,7 +23,7 @@ echo Compiling...
     /reference:System.Windows.Forms.dll ^
     /reference:System.Drawing.dll ^
     /debug ^
-    Program.cs NativeMethods.cs KeyboardHook.cs GhostLogic.cs DebugLogger.cs ^
+    Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostLogic.cs DebugLogger.cs ^
     2> compile_errors.txt
 
 if errorlevel 1 (
