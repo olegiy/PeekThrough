@@ -226,5 +226,8 @@ namespace PeekThrough
         
         public const int INPUT_KEYBOARD = 1;
         public const uint KEYEVENTF_KEYUP = 0x0002;
+        
+        // Magic value to tag our own injected inputs
+        public static readonly IntPtr INJECTED_BY_US = new IntPtr(0xDEADBEEF);
     }
 }

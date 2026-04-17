@@ -19,9 +19,6 @@ namespace PeekThrough
         
         // Флаг: была ли нажата другая клавиша ПОСЛЕ клавиши активации
         private bool _keyPressedAfterActivation = false;
-        
-        // Флаг: нужно ли игнорировать KEYUP для клавиши активации, пришедший от SendInput
-        private bool _ignoringInjectedActivationUp = false;
 
         public event Action OnActivationKeyDown;
         public event Action OnActivationKeyUp;
@@ -79,7 +76,12 @@ namespace PeekThrough
                 var hookStruct = (NativeMethods.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(NativeMethods.KBDLLHOOKSTRUCT));
                 int vkCode = hookStruct.vkCode;
                 int flags = hookStruct.flags;
-                bool isInjected = (flags & 0x10) != 0; // LLKHF_INJECTED = 0x10
+                
+                // Skip processing our own injected inputs (tagged with INJECTED_BY_US)
+                if (hookStruct.dwExtraInfo == NativeMethods.INJECTED_BY_US)
+                {
+                    return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+                }
                 
                 // Получаем текущую клавишу активации
                 int activationKey = _ghostLogic != null ? _ghostLogic.ActivationKeyCode : NativeMethods.VK_LWIN;
@@ -87,15 +89,7 @@ namespace PeekThrough
                 
                 if (isActivationKey)
                 {
-                    // Если это инжектированный KEYUP от нашего SendInput — пропускаем в систему
-                    if (isInjected && wParam == (IntPtr)NativeMethods.WM_KEYUP && _ignoringInjectedActivationUp)
-                    {
-                        DebugLogger.Log(string.Format("HookCallback: Ignoring injected activation KEYUP from SendInput"));
-                        _ignoringInjectedActivationUp = false;
-                        return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
-                    }
-                    
-                    DebugLogger.Log(string.Format("HookCallback: Activation key detected (vkCode={0}), wParam={1}, injected={2}", vkCode, wParam, isInjected));
+                    DebugLogger.Log(string.Format("HookCallback: Activation key detected (vkCode={0}), wParam={1}", vkCode, wParam));
 
                     // Безопасное копирование события для проверки null
                     Action handler = null;
@@ -126,8 +120,11 @@ namespace PeekThrough
                     }
                     else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
                     {
+                        // Capture the flag value BEFORE resetting it (fixes combo bug)
+                        bool keyPressedAfterActivation = _keyPressedAfterActivation;
+                        
                         // При отпускании клавиши активации проверяем, была ли нажата клавиша после
-                        if (_keyPressedAfterActivation)
+                        if (keyPressedAfterActivation)
                         {
                             DebugLogger.Log("HookCallback: Activation key released but key was pressed after - blocking Ghost Mode");
                             // Блокируем активацию Ghost Mode
@@ -148,8 +145,22 @@ namespace PeekThrough
 
                         // Сбрасываем флаг после обработки
                         _keyPressedAfterActivation = false;
-                    }
+                        
+                        // Подавление клавиши активации:
+                        // Если Ghost Mode активен или в задержке после деактивации — подавляем всё
+                        bool shouldSuppressGhost = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
+                        DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppressGhost));
 
+                        if (shouldSuppressGhost)
+                        {
+                            DebugLogger.Log("HookCallback: SUPPRESSING activation key event (Ghost Mode)!");
+                            return (IntPtr)1;
+                        }
+                        
+                        // No standalone KEYUP suppression - let the system handle short Win press
+                        // (Start menu will open naturally for short presses)
+                    }
+                    
                     // Вызов обработчика с обработкой исключений через syncContext
                     if (handler != null)
                     {
@@ -158,28 +169,6 @@ namespace PeekThrough
                             try { handler(); }
                             catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
                         }, null);
-                    }
-
-                    // Подавление клавиши активации:
-                    // 1. Если Ghost Mode активен или в задержке после деактивации — подавляем всё
-                    bool shouldSuppressGhost = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
-                    DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppressGhost));
-
-                    if (shouldSuppressGhost)
-                    {
-                        DebugLogger.Log("HookCallback: SUPPRESSING activation key event (Ghost Mode)!");
-                        return (IntPtr)1;
-                    }
-                    
-                    // 2. При одиночном нажатии KEYUP (без других клавиш) — подавляем
-                    //    и отправляем Esc + KEYUP чтобы предотвратить нежелательное поведение
-                    if (wParam == (IntPtr)NativeMethods.WM_KEYUP && !_keyPressedAfterActivation && _pressedKeys.Count == 0)
-                    {
-                        DebugLogger.Log("HookCallback: Single activation key KEYUP - suppressing");
-                        // При нажатой клавише активации кратковременно нажимаем Esc, затем отпускаем
-                        _ignoringInjectedActivationUp = true;
-                        SendEscActivationUpToPreventUnwantedBehavior(activationKey);
-                        return (IntPtr)1;
                     }
                 }
                 else
@@ -223,37 +212,6 @@ namespace PeekThrough
                 }
             }
             return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
-        }
-        
-        // Кратковременно нажимаем Esc при нажатой клавише активации, затем отпускаем
-        // Это прерывает нежелательное поведение (например, открытие меню Пуск для Win)
-        private void SendEscActivationUpToPreventUnwantedBehavior(int activationKey)
-        {
-            NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[3];
-            
-            // 1. Нажимаем Esc (при всё ещё нажатой клавише активации)
-            inputs[0].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[0].U.ki.wVk = NativeMethods.VK_ESCAPE;
-            inputs[0].U.ki.dwFlags = 0;
-            inputs[0].U.ki.time = 0;
-            inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
-
-            // 2. Отпускаем Esc
-            inputs[1].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[1].U.ki.wVk = NativeMethods.VK_ESCAPE;
-            inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
-            inputs[1].U.ki.time = 0;
-            inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
-
-            // 3. Отпускаем клавишу активации
-            inputs[2].type = NativeMethods.INPUT_KEYBOARD;
-            inputs[2].U.ki.wVk = (ushort)activationKey;
-            inputs[2].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
-            inputs[2].U.ki.time = 0;
-            inputs[2].U.ki.dwExtraInfo = IntPtr.Zero;
-
-            NativeMethods.SendInput(3, inputs, NativeMethods.INPUT.Size);
-            DebugLogger.Log(string.Format("SendEscActivationUpToPreventUnwantedBehavior: Sent Esc+Key {0} UP sequence", activationKey));
         }
     }
 }

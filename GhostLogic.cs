@@ -189,19 +189,9 @@ namespace PeekThrough
             
             DebugLogger.Log("=== OnKeyDown START ===");
             
-            // Проверяем, открыто ли меню Пуск, и если да — закрываем его
-            if (IsStartMenuOpen())
-            {
-                DebugLogger.Log("OnKeyDown: Start menu is open, closing it");
-                CloseStartMenu();
-                // Не запускаем таймер Ghost Mode — просто закрываем меню
-                lock (_lockObject)
-                {
-                    _isLWinDown = true;
-                    _timerFired = false;
-                }
-                return;
-            }
+            // Removed: IsStartMenuOpen early return - timer now starts always
+            // Short press → system handles Start menu naturally
+            // Long press → Ghost Mode activates and closes Start menu
             
             lock (_lockObject)
             {
@@ -435,14 +425,14 @@ namespace PeekThrough
                 inputs[0].U.ki.wVk = NativeMethods.VK_ESCAPE;
                 inputs[0].U.ki.dwFlags = 0;
                 inputs[0].U.ki.time = 0;
-                inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
+                inputs[0].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
                 
                 // 2. Отпускаем Escape
                 inputs[1].type = NativeMethods.INPUT_KEYBOARD;
                 inputs[1].U.ki.wVk = NativeMethods.VK_ESCAPE;
                 inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
                 inputs[1].U.ki.time = 0;
-                inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
+                inputs[1].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
                 
                 NativeMethods.SendInput(2, inputs, NativeMethods.INPUT.Size);
                 DebugLogger.Log("CloseStartMenu: Escape key sent");
@@ -510,21 +500,21 @@ namespace PeekThrough
             inputs[0].U.ki.wVk = NativeMethods.VK_ESCAPE;
             inputs[0].U.ki.dwFlags = 0;
             inputs[0].U.ki.time = 0;
-            inputs[0].U.ki.dwExtraInfo = IntPtr.Zero;
+            inputs[0].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
 
             // 2. Отпускаем Esc
             inputs[1].type = NativeMethods.INPUT_KEYBOARD;
             inputs[1].U.ki.wVk = NativeMethods.VK_ESCAPE;
             inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[1].U.ki.time = 0;
-            inputs[1].U.ki.dwExtraInfo = IntPtr.Zero;
+            inputs[1].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
 
             // 3. Отпускаем клавишу активации
             inputs[2].type = NativeMethods.INPUT_KEYBOARD;
             inputs[2].U.ki.wVk = (ushort)ActivationKeyCode;
             inputs[2].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
             inputs[2].U.ki.time = 0;
-            inputs[2].U.ki.dwExtraInfo = IntPtr.Zero;
+            inputs[2].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
 
             NativeMethods.SendInput(3, inputs, NativeMethods.INPUT.Size);
         }
@@ -561,6 +551,13 @@ namespace PeekThrough
                     DebugLogger.Log("ActivateGhostMode: Ignored system window");
                     return;
                 }
+            }
+
+            // Close Start menu if it's open (handles case where user held Win while Start was visible)
+            if (IsStartMenuOpen())
+            {
+                DebugLogger.Log("ActivateGhostMode: Start menu is open, closing it");
+                CloseStartMenu();
             }
 
             // Проверяем, не то ли это же окно, что уже активировано
