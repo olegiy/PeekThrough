@@ -172,7 +172,8 @@ namespace PeekThrough
 
         public void DeactivateGhostMode()
         {
-            if (!_activationState.IsGhostModeActive)
+            bool hasActiveWindow = _currentTargetHwnd != IntPtr.Zero || _transparencyManager.GhostWindows.Count > 0;
+            if (!hasActiveWindow)
                 return;
 
             DebugLogger.Log("=== GhostController.DeactivateGhostMode ===");
@@ -221,8 +222,13 @@ namespace PeekThrough
                 return;
             }
 
+            // ActivationStateManager marks the mode active before this method runs so
+            // Win suppression stays in sync. Only treat it as an existing ghost window
+            // once we actually have a tracked target window.
+            bool hasTrackedGhostWindow = _activationState.IsGhostModeActive && _currentTargetHwnd != IntPtr.Zero;
+
             // Already active on this window
-            if (hwnd == _currentTargetHwnd && _activationState.IsGhostModeActive)
+            if (hasTrackedGhostWindow && hwnd == _currentTargetHwnd)
             {
                 DebugLogger.Log("ActivateGhostMode: Same window, showing tooltip");
                 _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
@@ -230,7 +236,7 @@ namespace PeekThrough
             }
 
             // Already active on different window
-            if (_activationState.IsGhostModeActive)
+            if (hasTrackedGhostWindow)
             {
                 DebugLogger.Log("ActivateGhostMode: Already active on different window, ignoring");
                 _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
