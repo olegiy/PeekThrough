@@ -270,10 +270,10 @@ namespace PeekThrough
                         _currentTargetHwnd = IntPtr.Zero;
                         _lastActivatedHwnd = IntPtr.Zero;
 
-                        // Включаем подавление Win на короткое время после деактивации
-                        _suppressWinKey = true;
-                        _suppressWinTimer.Start();
-                        DebugLogger.Log("OnKeyUp: Started Win suppression timer");
+                        // No suppress timer needed - Win key events were suppressed during Ghost Mode,
+                        // system is already in "Win released" state from synthetic Win UP sent at activation.
+                        // Sending Esc+Win UP would deselect files in Explorer, so we skip it.
+                        DebugLogger.Log("OnKeyUp: Ghost Mode deactivated without suppress timer (file selection preserved)");
                     }
                 }
                 else if (!_timerFired)
