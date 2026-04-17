@@ -120,6 +120,7 @@ namespace PeekThrough
         public const int WM_XBUTTONUP = 0x020C;
         public const int VK_LWIN = 0x5B;
         public const int VK_RWIN = 0x5C;
+        public const int VK_SHIFT = 0x10;
         public const int VK_CONTROL = 0x11;
         public const int VK_LCONTROL = 0xA2;
         public const int VK_RCONTROL = 0xA3;
@@ -142,6 +143,8 @@ namespace PeekThrough
         public const int VK_END = 0x23;
         public const int VK_PRIOR = 0x21; // Page Up
         public const int VK_NEXT = 0x22;  // Page Down
+        public const int VK_UP = 0x26;
+        public const int VK_DOWN = 0x28;
         public const int VK_OEM_3 = 0xC0; // Tilde/Backtick (`~)
         public const int XBUTTON1 = 0x0001;
         public const int XBUTTON2 = 0x0002;

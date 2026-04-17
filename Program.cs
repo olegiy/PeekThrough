@@ -2,6 +2,8 @@ using System;
 using System.Windows.Forms;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
+using PeekThrough.Models;
 
 namespace PeekThrough
 {
@@ -9,20 +11,17 @@ namespace PeekThrough
     {
         private static KeyboardHook _keyboardHook;
         private static MouseHook _mouseHook;
-        private static GhostLogic _logic;
-        
-        // Путь к файлу настроек
+        private static GhostController _controller;
+        private static SettingsManager _settingsManager;
+        private static Settings _settings;
+
+        // Paths
         private static readonly string SettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "PeekThrough",
             "settings.json");
-        
-        // Настройки
-        private static int _activationKeyCode = NativeMethods.VK_LWIN; // По умолчанию Win
-        private static GhostLogic.ActivationType _activationType = GhostLogic.ActivationType.Keyboard;
-        private static int _mouseButton = NativeMethods.VK_MBUTTON;
-        
-        // Карта клавиш для отображения
+
+        // Key display names (unchanged)
         private static readonly Dictionary<int, string> KeyDisplayNames = new Dictionary<int, string>
         {
             { NativeMethods.VK_LWIN, "Left Win" },
@@ -59,33 +58,44 @@ namespace PeekThrough
             {
                 if (!mutex.WaitOne(0, false))
                 {
-                    // Already running
-                    return;
+                    return; // Already running
                 }
 
-                // Загружаем настройки
-                LoadSettings();
+                // Initialize settings
+                _settingsManager = new SettingsManager(SettingsPath);
+                _settings = _settingsManager.LoadSettings();
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
-                // Создаем GhostLogic с типом активации из настроек
-                _logic = new GhostLogic(_activationType);
-                _logic.ActivationKeyCode = _activationKeyCode;
-                
-                // Инициализируем хуки
-                _keyboardHook = new KeyboardHook(_logic);
-                _mouseHook = new MouseHook(_logic, _mouseButton);
+                // Create profile manager from settings
+                var profiles = new List<Profile>();
+                foreach (var p in _settings.Profiles.List)
+                {
+                    profiles.Add(new Profile(p.Id, p.Name, p.Opacity));
+                }
+                var profileManager = new ProfileManager(_settings.Profiles.ActiveId, profiles);
 
-                // Подписываемся на события
+                // Create GhostController
+                var activationType = _settings.Activation.Type == "mouse"
+                    ? ActivationInputType.Mouse
+                    : ActivationInputType.Keyboard;
+
+                _controller = new GhostController(activationType, profileManager);
+                _controller.ActivationKeyCode = _settings.Activation.KeyCode;
+
+                // Create hooks
+                _keyboardHook = new KeyboardHook(_controller);
+                _mouseHook = new MouseHook(_controller, _settings.Activation.MouseButton);
+
+                // Subscribe to events
                 SubscribeHookEvents();
 
                 // Setup Tray Icon
                 using (var trayIcon = new NotifyIcon())
                 {
                     trayIcon.Text = "PeekThrough Ghost Mode";
-                    
-                    // Try to load icon from resources folder
+
                     string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "icons", "icon.ico");
                     if (File.Exists(iconPath))
                     {
@@ -93,12 +103,10 @@ namespace PeekThrough
                     }
                     else
                     {
-                        // Fallback to generic icon if file not found
                         trayIcon.Icon = System.Drawing.SystemIcons.Application;
                     }
 
                     var contextMenu = new ContextMenu();
-                    // Добавляем пункты для настройки активации
                     contextMenu.MenuItems.Add("Activation Key", (s, e) => ShowKeySelectionMenu());
                     contextMenu.MenuItems.Add("Activation Method", (s, e) => ShowActivationSettings());
                     contextMenu.MenuItems.Add("-");
@@ -106,205 +114,150 @@ namespace PeekThrough
                     trayIcon.ContextMenu = contextMenu;
                     trayIcon.Visible = true;
 
-                    // Create a dummy ApplicationContext to run the loop without a main form visible at start
                     Application.Run();
 
                     trayIcon.Visible = false;
                 }
 
-                _keyboardHook.Dispose();
-                _mouseHook.Dispose();
-                _logic.Dispose();
+                // Cleanup
+                if (_keyboardHook != null)
+                    _keyboardHook.Dispose();
+                if (_mouseHook != null)
+                    _mouseHook.Dispose();
+                if (_controller != null)
+                    _controller.Dispose();
+
+                // Save settings (preserve active profile)
+                _settings.Profiles.ActiveId = profileManager.ActiveProfile.Id;
+                _settingsManager.SaveSettings(_settings);
             }
         }
-        
-        // Загрузка настроек из файла
-        private static void LoadSettings()
-        {
-            try
-            {
-                if (File.Exists(SettingsPath))
-                {
-                    string[] lines = File.ReadAllLines(SettingsPath);
-                    foreach (string line in lines)
-                    {
-                        string[] parts = line.Split(':');
-                        if (parts.Length == 2)
-                        {
-                            string key = parts[0].Trim();
-                            string value = parts[1].Trim();
-                            
-                            switch (key)
-                            {
-                                case "ActivationKeyCode":
-                                    _activationKeyCode = int.Parse(value);
-                                    break;
-                                case "ActivationType":
-                                    _activationType = (GhostLogic.ActivationType)int.Parse(value);
-                                    break;
-                                case "MouseButton":
-                                    _mouseButton = int.Parse(value);
-                                    break;
-                            }
-                        }
-                    }
-                    DebugLogger.Log(string.Format("Settings loaded: Key={0}, Type={1}, Mouse={2}", 
-                        _activationKeyCode, _activationType, _mouseButton));
-                }
-            }
-            catch (Exception ex)
-            {
-                DebugLogger.Log(string.Format("Error loading settings: {0}", ex.Message));
-            }
-        }
-        
-        // Сохранение настроек в файл
-        private static void SaveSettings()
-        {
-            try
-            {
-                string dir = Path.GetDirectoryName(SettingsPath);
-                if (!Directory.Exists(dir))
-                    Directory.CreateDirectory(dir);
-                
-                string[] lines = new string[]
-                {
-                    string.Format("ActivationKeyCode: {0}", _activationKeyCode),
-                    string.Format("ActivationType: {0}", (int)_activationType),
-                    string.Format("MouseButton: {0}", _mouseButton)
-                };
-                File.WriteAllLines(SettingsPath, lines);
-                DebugLogger.Log("Settings saved");
-            }
-            catch (Exception ex)
-            {
-                DebugLogger.Log(string.Format("Error saving settings: {0}", ex.Message));
-            }
-        }
-        
-        // Получение отображаемого имени клавиши
-        private static string GetKeyDisplayName(int vkCode)
-        {
-            string name;
-            if (KeyDisplayNames.TryGetValue(vkCode, out name))
-                return name;
-            return string.Format("Key 0x{0:X2}", vkCode);
-        }
-        
-        // Подписка событий хуков на текущий _logic
+
         private static void SubscribeHookEvents()
         {
-            // Подписываемся на события клавиатуры
-            _keyboardHook.OnActivationKeyDown += _logic.OnKeyDown;
-            _keyboardHook.OnActivationKeyUp += _logic.OnKeyUp;
-            _keyboardHook.OnOtherKeyPressedBeforeActivation += _logic.BlockGhostMode;
+            _keyboardHook.OnActivationKeyDown += _controller.OnKeyDown;
+            _keyboardHook.OnActivationKeyUp += _controller.OnKeyUp;
+            _keyboardHook.OnOtherKeyPressedBeforeActivation += _controller.BlockGhostMode;
 
-            // Подписываемся на события мыши
-            _mouseHook.OnSelectedMouseDown += _logic.OnMouseButtonDown;
-            _mouseHook.OnSelectedMouseUp += _logic.OnMouseButtonUp;
-            _mouseHook.OnOtherMouseButtonPressedBeforeSelected += _logic.BlockGhostMode;
+            _mouseHook.OnSelectedMouseDown += _controller.OnMouseButtonDown;
+            _mouseHook.OnSelectedMouseUp += _controller.OnMouseButtonUp;
+            _mouseHook.OnOtherMouseButtonPressedBeforeSelected += _controller.BlockGhostMode;
         }
-        
-        // Отписка событий хуков от текущего _logic
+
         private static void UnsubscribeHookEvents()
         {
-            _keyboardHook.OnActivationKeyDown -= _logic.OnKeyDown;
-            _keyboardHook.OnActivationKeyUp -= _logic.OnKeyUp;
-            _keyboardHook.OnOtherKeyPressedBeforeActivation -= _logic.BlockGhostMode;
+            _keyboardHook.OnActivationKeyDown -= _controller.OnKeyDown;
+            _keyboardHook.OnActivationKeyUp -= _controller.OnKeyUp;
+            _keyboardHook.OnOtherKeyPressedBeforeActivation -= _controller.BlockGhostMode;
 
-            _mouseHook.OnSelectedMouseDown -= _logic.OnMouseButtonDown;
-            _mouseHook.OnSelectedMouseUp -= _logic.OnMouseButtonUp;
-            _mouseHook.OnOtherMouseButtonPressedBeforeSelected -= _logic.BlockGhostMode;
+            _mouseHook.OnSelectedMouseDown -= _controller.OnMouseButtonDown;
+            _mouseHook.OnSelectedMouseUp -= _controller.OnMouseButtonUp;
+            _mouseHook.OnOtherMouseButtonPressedBeforeSelected -= _controller.BlockGhostMode;
         }
-        
-        // Безопасное переключение метода активации
-        private static void SwitchActivation(GhostLogic.ActivationType type, int mouseButton = NativeMethods.VK_MBUTTON)
+
+        private static void SwitchActivation(ActivationInputType type, int mouseButton)
         {
-            // Деактивируем Ghost Mode если активен
-            if (_logic.IsGhostModeActive)
-                _logic.DeactivateGhostMode();
-            
-            // Отписываемся от старого logic
+            if (_controller.IsGhostModeActive)
+                _controller.DeactivateGhostMode();
+
             UnsubscribeHookEvents();
-            
-            // Dispose старого logic
-            _logic.Dispose();
-            
-            // Создаём новый logic с нужным типом активации
-            _logic = new GhostLogic(type);
-            _logic.ActivationKeyCode = _activationKeyCode;
-            
-            // Переподписываем оба хука на новый logic
+            _controller.Dispose();
+
+            // Create new controller with new activation type
+            var profileManager = new ProfileManager(_settings.Profiles.ActiveId);
+            _controller = new GhostController(type, profileManager);
+            _controller.ActivationKeyCode = _settings.Activation.KeyCode;
+
+            // Recreate hooks
+            if (_keyboardHook != null)
+                _keyboardHook.Dispose();
+            if (_mouseHook != null)
+                _mouseHook.Dispose();
+            _keyboardHook = new KeyboardHook(_controller);
+            _mouseHook = new MouseHook(_controller, mouseButton);
+
             SubscribeHookEvents();
-            
-            // Устанавливаем кнопку мыши если нужно
-            if (type == GhostLogic.ActivationType.Mouse)
-                _mouseHook.SetSelectedMouseButton(mouseButton);
-            
-            // Сохраняем настройки
-            _activationType = type;
-            _mouseButton = mouseButton;
-            SaveSettings();
+
+            // Update settings
+            _settings.Activation.Type = (type == ActivationInputType.Mouse) ? "mouse" : "keyboard";
+            _settings.Activation.MouseButton = mouseButton;
+            _settingsManager.SaveSettings(_settings);
         }
-        
-        // Метод для показа настроек активации
+
+        private static void SetActivationKey(int vkCode)
+        {
+            DebugLogger.Log(string.Format("SetActivationKey: {0} (0x{1:X2})", vkCode, vkCode));
+
+            if (_controller.IsGhostModeActive)
+                _controller.DeactivateGhostMode();
+
+            UnsubscribeHookEvents();
+            _controller.Dispose();
+
+            var profileManager = new ProfileManager(_settings.Profiles.ActiveId);
+            var activationType = _settings.Activation.Type == "mouse"
+                ? ActivationInputType.Mouse
+                : ActivationInputType.Keyboard;
+
+            _controller = new GhostController(activationType, profileManager);
+            _controller.ActivationKeyCode = vkCode;
+
+            if (_keyboardHook != null)
+                _keyboardHook.Dispose();
+            _keyboardHook = new KeyboardHook(_controller);
+
+            SubscribeHookEvents();
+
+            _settings.Activation.KeyCode = vkCode;
+            _settingsManager.SaveSettings(_settings);
+        }
+
         private static void ShowActivationSettings()
         {
             var menu = new ContextMenuStrip();
-            
-            // Добавляем пункты для выбора типа активации
+
             var keyboardItem = new ToolStripMenuItem("Keyboard");
             var mouseMiddleItem = new ToolStripMenuItem("Mouse (Middle Button)");
             var mouseRightItem = new ToolStripMenuItem("Mouse (Right Button)");
             var mouseX1Item = new ToolStripMenuItem("Mouse (X1 Button)");
             var mouseX2Item = new ToolStripMenuItem("Mouse (X2 Button)");
-            
-            // Устанавливаем галочки для текущего типа активации
-            switch (_logic.CurrentActivationType)
+
+            // Set checked state
+            if (_settings.Activation.Type == "keyboard")
             {
-                case GhostLogic.ActivationType.Keyboard:
-                    keyboardItem.Checked = true;
-                    break;
-                case GhostLogic.ActivationType.Mouse:
-                    // Проверяем, какая кнопка мыши используется
-                    int selectedMouseButton = _mouseHook.SelectedMouseButton;
-                    if (selectedMouseButton == NativeMethods.VK_MBUTTON)
-                        mouseMiddleItem.Checked = true;
-                    else if (selectedMouseButton == NativeMethods.VK_RBUTTON)
-                        mouseRightItem.Checked = true;
-                    else if (selectedMouseButton == NativeMethods.VK_XBUTTON1)
-                        mouseX1Item.Checked = true;
-                    else if (selectedMouseButton == NativeMethods.VK_XBUTTON2)
-                        mouseX2Item.Checked = true;
-                    break;
+                keyboardItem.Checked = true;
             }
-            
-            // Обработчики для изменения типа активации
-            keyboardItem.Click += (s, e) => SwitchActivation(GhostLogic.ActivationType.Keyboard);
-            mouseMiddleItem.Click += (s, e) => SwitchActivation(GhostLogic.ActivationType.Mouse, NativeMethods.VK_MBUTTON);
-            mouseRightItem.Click += (s, e) => SwitchActivation(GhostLogic.ActivationType.Mouse, NativeMethods.VK_RBUTTON);
-            mouseX1Item.Click += (s, e) => SwitchActivation(GhostLogic.ActivationType.Mouse, NativeMethods.VK_XBUTTON1);
-            mouseX2Item.Click += (s, e) => SwitchActivation(GhostLogic.ActivationType.Mouse, NativeMethods.VK_XBUTTON2);
-            
+            else
+            {
+                switch (_settings.Activation.MouseButton)
+                {
+                    case NativeMethods.VK_MBUTTON: mouseMiddleItem.Checked = true; break;
+                    case NativeMethods.VK_RBUTTON: mouseRightItem.Checked = true; break;
+                    case NativeMethods.VK_XBUTTON1: mouseX1Item.Checked = true; break;
+                    case NativeMethods.VK_XBUTTON2: mouseX2Item.Checked = true; break;
+                }
+            }
+
+            keyboardItem.Click += (s, e) => SwitchActivation(ActivationInputType.Keyboard, NativeMethods.VK_MBUTTON);
+            mouseMiddleItem.Click += (s, e) => SwitchActivation(ActivationInputType.Mouse, NativeMethods.VK_MBUTTON);
+            mouseRightItem.Click += (s, e) => SwitchActivation(ActivationInputType.Mouse, NativeMethods.VK_RBUTTON);
+            mouseX1Item.Click += (s, e) => SwitchActivation(ActivationInputType.Mouse, NativeMethods.VK_XBUTTON1);
+            mouseX2Item.Click += (s, e) => SwitchActivation(ActivationInputType.Mouse, NativeMethods.VK_XBUTTON2);
+
             menu.Items.Add(keyboardItem);
             menu.Items.Add(mouseMiddleItem);
             menu.Items.Add(mouseRightItem);
             menu.Items.Add(mouseX1Item);
             menu.Items.Add(mouseX2Item);
-            
-            // Закрываем меню после выбора пункта
+
             menu.ItemClicked += (s, e) => menu.Close();
-            
-            // Показываем меню в позиции курсора
-            menu.Show(System.Windows.Forms.Cursor.Position);
+            menu.Show(Cursor.Position);
         }
-        
-        // Меню для выбора клавиши активации
+
         private static void ShowKeySelectionMenu()
         {
             var menu = new ContextMenuStrip();
-            
-            // Доступные клавиши для выбора
+
             int[] availableKeys = new int[]
             {
                 NativeMethods.VK_LWIN, NativeMethods.VK_RWIN,
@@ -313,61 +266,35 @@ namespace PeekThrough
                 NativeMethods.VK_LSHIFT, NativeMethods.VK_RSHIFT,
                 NativeMethods.VK_CAPITAL, NativeMethods.VK_TAB,
                 NativeMethods.VK_SPACE, NativeMethods.VK_ESCAPE,
-                NativeMethods.VK_OEM_3, // Tilde (`~)
+                NativeMethods.VK_OEM_3,
                 NativeMethods.VK_INSERT, NativeMethods.VK_DELETE,
                 NativeMethods.VK_HOME, NativeMethods.VK_END,
                 NativeMethods.VK_PRIOR, NativeMethods.VK_NEXT,
                 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
                 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B
             };
-            
+
             foreach (int vkCode in availableKeys)
             {
                 var item = new ToolStripMenuItem(GetKeyDisplayName(vkCode));
-                if (vkCode == _activationKeyCode)
+                if (vkCode == _settings.Activation.KeyCode)
                     item.Checked = true;
-                
-                int key = vkCode; // замыкание
+
+                int key = vkCode;
                 item.Click += (s, e) => SetActivationKey(key);
                 menu.Items.Add(item);
             }
-            
-            // Закрываем меню после выбора пункта
+
             menu.ItemClicked += (s, e) => menu.Close();
-            
-            // Показываем меню в позиции курсора
-            menu.Show(System.Windows.Forms.Cursor.Position);
+            menu.Show(Cursor.Position);
         }
-        
-        // Установка новой клавиши активации
-        private static void SetActivationKey(int vkCode)
+
+        private static string GetKeyDisplayName(int vkCode)
         {
-            DebugLogger.Log(string.Format("SetActivationKey: {0} (0x{1:X2})", vkCode, vkCode));
-            
-            // Деактивируем Ghost Mode если активен
-            if (_logic.IsGhostModeActive)
-                _logic.DeactivateGhostMode();
-            
-            // Отписываемся от старого logic
-            UnsubscribeHookEvents();
-            
-            // Dispose старого logic
-            _logic.Dispose();
-            
-            // Создаём новый logic
-            _logic = new GhostLogic(_activationType);
-            _logic.ActivationKeyCode = vkCode;
-            
-            // Обновляем хук
-            _keyboardHook.Dispose();
-            _keyboardHook = new KeyboardHook(_logic);
-            
-            // Переподписываем
-            SubscribeHookEvents();
-            
-            // Сохраняем настройку
-            _activationKeyCode = vkCode;
-            SaveSettings();
+            string name;
+            if (KeyDisplayNames.TryGetValue(vkCode, out name))
+                return name;
+            return string.Format("Key 0x{0:X2}", vkCode);
         }
     }
 }

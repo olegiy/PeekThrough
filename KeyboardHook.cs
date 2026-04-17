@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace PeekThrough
 {
@@ -12,25 +13,28 @@ namespace PeekThrough
         private IntPtr _hookID = IntPtr.Zero;
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
-        private GhostLogic _ghostLogic;
-        
-        // Отслеживание нажатых клавиш (кроме клавиши активации)
+        private GhostController _ghostController;
+
+        // Modifier key tracking
+        private bool _ctrlPressed;
+        private bool _shiftPressed;
+        private bool _altPressed;
+
+        // Other key tracking
         private HashSet<int> _pressedKeys = new HashSet<int>();
-        
-        // Флаг: была ли нажата другая клавиша ПОСЛЕ клавиши активации
         private bool _keyPressedAfterActivation = false;
 
         public event Action OnActivationKeyDown;
         public event Action OnActivationKeyUp;
-        
-        // Событие для уведомления о нажатии другой клавиши перед клавишей активации
         public event Action OnOtherKeyPressedBeforeActivation;
 
-        public KeyboardHook(GhostLogic ghostLogic)
+        public KeyboardHook(GhostController ghostController)
         {
-            _ghostLogic = ghostLogic;
+            _ghostController = ghostController;
             _proc = HookCallback;
-            _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+            _syncContext = SynchronizationContext.Current;
+            if (_syncContext == null)
+                _syncContext = new SynchronizationContext();
             _hookID = SetHook(_proc);
             DebugLogger.Log(string.Format("KeyboardHook initialized, hook ID: {0}", _hookID));
         }
@@ -72,162 +76,186 @@ namespace PeekThrough
         {
             if (nCode >= 0)
             {
-                // Используем PtrToStructure для безопасного доступа к полям структуры
                 var hookStruct = (NativeMethods.KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(NativeMethods.KBDLLHOOKSTRUCT));
                 int vkCode = hookStruct.vkCode;
                 int flags = hookStruct.flags;
-                
-                // Skip processing our own injected inputs (tagged with INJECTED_BY_US)
+
+                // Skip our own injected inputs
                 if (hookStruct.dwExtraInfo == NativeMethods.INJECTED_BY_US)
                 {
                     return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
                 }
-                
-                // Получаем текущую клавишу активации
-                int activationKey = _ghostLogic != null ? _ghostLogic.ActivationKeyCode : NativeMethods.VK_LWIN;
+
+                bool isKeyDown = (wParam == (IntPtr)NativeMethods.WM_KEYDOWN);
+                bool isKeyUp = (wParam == (IntPtr)NativeMethods.WM_KEYUP);
+
+                // Track modifier keys
+                UpdateModifierKeys(vkCode, isKeyDown, isKeyUp);
+
+                // Try hotkey processing first (always active)
+                bool hotkeyConsumed = TryProcessHotkey(vkCode, isKeyDown);
+                if (hotkeyConsumed)
+                {
+                    return (IntPtr)1; // Suppress the key
+                }
+
+                // Process activation key
+                int activationKey = NativeMethods.VK_LWIN;
+                if (_ghostController != null)
+                    activationKey = _ghostController.ActivationKeyCode;
                 bool isActivationKey = (vkCode == activationKey);
-                
+
                 if (isActivationKey)
                 {
-                    DebugLogger.Log(string.Format("HookCallback: Activation key detected (vkCode={0}), wParam={1}", vkCode, wParam));
+                    return ProcessActivationKey(wParam, vkCode);
+                }
+                else
+                {
+                    return ProcessOtherKey(wParam, vkCode);
+                }
+            }
+            return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+        }
 
-                    // Безопасное копирование события для проверки null
-                    Action handler = null;
+        private void UpdateModifierKeys(int vkCode, bool isKeyDown, bool isKeyUp)
+        {
+            if (vkCode == NativeMethods.VK_CONTROL || vkCode == NativeMethods.VK_LCONTROL || vkCode == NativeMethods.VK_RCONTROL)
+                _ctrlPressed = isKeyDown;
+            if (vkCode == NativeMethods.VK_SHIFT || vkCode == NativeMethods.VK_LSHIFT || vkCode == NativeMethods.VK_RSHIFT)
+                _shiftPressed = isKeyDown;
+            if (vkCode == NativeMethods.VK_LMENU || vkCode == NativeMethods.VK_RMENU)
+                _altPressed = isKeyDown;
+        }
 
-                    if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
-                    {
-                        // Сбрасываем флаг при новом нажатии клавиши активации
-                        _keyPressedAfterActivation = false;
+        private bool TryProcessHotkey(int vkCode, bool isKeyDown)
+        {
+            if (!isKeyDown || _ghostController == null)
+                return false;
 
-                        // Если нажата другая клавиша до клавиши активации - не активируем Ghost Mode
-                        if (_pressedKeys.Count > 0)
-                        {
-                            DebugLogger.Log(string.Format("HookCallback: Other keys pressed before activation key ({0}), blocking Ghost Mode", _pressedKeys.Count));
-                            var handlerBlocked = OnOtherKeyPressedBeforeActivation;
-                            if (handlerBlocked != null)
-                            {
-                                _syncContext.Post(state =>
-                                {
-                                    try { handlerBlocked(); }
-                                    catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error: {0}", ex.Message)); }
-                                }, null);
-                            }
-                        }
-                        else
-                        {
-                            handler = OnActivationKeyDown;
-                        }
-                    }
-                    else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
-                    {
-                        // Capture the flag value BEFORE resetting it (fixes combo bug)
-                        bool keyPressedAfterActivation = _keyPressedAfterActivation;
-                        
-                        // При отпускании клавиши активации проверяем, была ли нажата клавиша после
-                        if (keyPressedAfterActivation)
-                        {
-                            DebugLogger.Log("HookCallback: Activation key released but key was pressed after - blocking Ghost Mode");
-                            // Блокируем активацию Ghost Mode
-                            var handlerBlocked = OnOtherKeyPressedBeforeActivation;
-                            if (handlerBlocked != null)
-                            {
-                                _syncContext.Post(state =>
-                                {
-                                    try { handlerBlocked(); }
-                                    catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error on activation key release: {0}", ex.Message)); }
-                                }, null);
-                            }
-                        }
-                        else
-                        {
-                            handler = OnActivationKeyUp;
-                        }
+            // Don't process hotkeys if we're in the middle of activation key handling
+            if (_ghostController.IsLWinPressed)
+                return false;
 
-                        // Сбрасываем флаг после обработки
-                        _keyPressedAfterActivation = false;
-                    }
-                    
-                    // Подавление клавиши активации:
-                    // Если Ghost Mode активен или в задержке после деактивации — подавляем всё
-                    bool shouldSuppressGhost = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
-                    DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppressGhost));
+            return _ghostController.ProcessHotkey(vkCode, isKeyDown, _ctrlPressed, _shiftPressed, _altPressed);
+        }
 
-                    if (shouldSuppressGhost)
-                    {
-                        DebugLogger.Log("HookCallback: SUPPRESSING activation key event (Ghost Mode)!");
+        private IntPtr ProcessActivationKey(IntPtr wParam, int vkCode)
+        {
+            DebugLogger.Log(string.Format("HookCallback: Activation key detected (vkCode={0}), wParam={1}", vkCode, wParam));
 
-                        // KEYDOWN during Ghost Mode: fire handler (for toggle-off timer start)
-                        if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN && handler != null)
-                        {
-                            _syncContext.Post(state =>
-                            {
-                                try { handler(); }
-                                catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
-                            }, null);
-                        }
-                        // KEYUP: fire handler (existing behavior)
-                        else if (wParam == (IntPtr)NativeMethods.WM_KEYUP && handler != null)
-                        {
-                            _syncContext.Post(state =>
-                            {
-                                try { handler(); }
-                                catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
-                            }, null);
-                        }
+            Action handler = null;
 
-                        return (IntPtr)1;
-                    }
-                    
-                    // Вызов обработчика с обработкой исключений через syncContext (when NOT suppressed)
-                    if (handler != null)
+            if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
+            {
+                _keyPressedAfterActivation = false;
+
+                if (_pressedKeys.Count > 0)
+                {
+                    DebugLogger.Log(string.Format("HookCallback: Other keys pressed before activation ({0}), blocking", _pressedKeys.Count));
+                    var handlerBlocked = OnOtherKeyPressedBeforeActivation;
+                    if (handlerBlocked != null)
                     {
                         _syncContext.Post(state =>
                         {
-                            try { handler(); }
-                            catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
+                            try { handlerBlocked(); }
+                            catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error: {0}", ex.Message)); }
                         }, null);
                     }
                 }
                 else
                 {
-                    // Отслеживание нажатия/отпускания других клавиш
-                    if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
-                    {
-                        _pressedKeys.Add(vkCode);
-                        DebugLogger.Log(string.Format("HookCallback: Other key DOWN, vkCode={0}, total pressed: {1}", vkCode, _pressedKeys.Count));
-
-                        // Если клавиша активации сейчас нажата, отмечаем что клавиша нажата ПОСЛЕ
-                        if (_ghostLogic != null && _ghostLogic.IsLWinPressed)
-                        {
-                            _keyPressedAfterActivation = true;
-                            DebugLogger.Log("HookCallback: Key pressed AFTER activation key - will block Ghost Mode");
-                        }
-
-                        // Escape key during Ghost Mode - quick exit
-                        if (_ghostLogic != null && _ghostLogic.IsGhostModeActive && vkCode == NativeMethods.VK_ESCAPE)
-                        {
-                            DebugLogger.Log("HookCallback: Escape pressed while Ghost Mode active, deactivating");
-                            _syncContext.Post(state =>
-                            {
-                                try
-                                {
-                                    _ghostLogic.DeactivateGhostMode();
-                                }
-                                catch (Exception ex)
-                                {
-                                    DebugLogger.Log(string.Format("DeactivateGhostMode error: {0}", ex.Message));
-                                }
-                            }, null);
-                        }
-                    }
-                    else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
-                    {
-                        _pressedKeys.Remove(vkCode);
-                        DebugLogger.Log(string.Format("HookCallback: Other key UP, vkCode={0}, remaining: {1}", vkCode, _pressedKeys.Count));
-                    }
+                    handler = OnActivationKeyDown;
                 }
             }
-            return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+            else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
+            {
+                bool keyPressedAfterActivation = _keyPressedAfterActivation;
+
+                if (keyPressedAfterActivation)
+                {
+                    DebugLogger.Log("HookCallback: Key pressed after activation - blocking");
+                    var handlerBlocked = OnOtherKeyPressedBeforeActivation;
+                    if (handlerBlocked != null)
+                    {
+                        _syncContext.Post(state =>
+                        {
+                            try { handlerBlocked(); }
+                            catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error on release: {0}", ex.Message)); }
+                        }, null);
+                    }
+                }
+                else
+                {
+                    handler = OnActivationKeyUp;
+                }
+
+                _keyPressedAfterActivation = false;
+            }
+
+            // Check if we should suppress the activation key
+            bool shouldSuppress = _ghostController != null && _ghostController.ShouldSuppressWinKey;
+            DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppress));
+
+            if (shouldSuppress)
+            {
+                DebugLogger.Log("HookCallback: SUPPRESSING activation key event!");
+
+                if (handler != null)
+                {
+                    _syncContext.Post(state =>
+                    {
+                        try { handler(); }
+                        catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
+                    }, null);
+                }
+
+                return (IntPtr)1;
+            }
+
+            // Not suppressed - fire handler normally
+            if (handler != null)
+            {
+                _syncContext.Post(state =>
+                {
+                    try { handler(); }
+                    catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
+                }, null);
+            }
+
+            return NativeMethods.CallNextHookEx(_hookID, 0, wParam, IntPtr.Zero);
+        }
+
+        private IntPtr ProcessOtherKey(IntPtr wParam, int vkCode)
+        {
+            if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
+            {
+                _pressedKeys.Add(vkCode);
+                DebugLogger.Log(string.Format("HookCallback: Other key DOWN, vkCode={0}, total: {1}", vkCode, _pressedKeys.Count));
+
+                if (_ghostController != null && _ghostController.IsLWinPressed)
+                {
+                    _keyPressedAfterActivation = true;
+                    DebugLogger.Log("HookCallback: Key pressed AFTER activation key");
+                }
+
+                // Escape during Ghost Mode - quick exit
+                if (_ghostController != null && _ghostController.IsGhostModeActive && vkCode == NativeMethods.VK_ESCAPE)
+                {
+                    DebugLogger.Log("HookCallback: Escape pressed while Ghost Mode active");
+                    _syncContext.Post(state =>
+                    {
+                        try { _ghostController.DeactivateGhostMode(); }
+                        catch (Exception ex) { DebugLogger.Log(string.Format("DeactivateGhostMode error: {0}", ex.Message)); }
+                    }, null);
+                }
+            }
+            else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
+            {
+                _pressedKeys.Remove(vkCode);
+                DebugLogger.Log(string.Format("HookCallback: Other key UP, vkCode={0}, remaining: {1}", vkCode, _pressedKeys.Count));
+            }
+
+            return NativeMethods.CallNextHookEx(_hookID, 0, wParam, IntPtr.Zero);
         }
     }
 }
