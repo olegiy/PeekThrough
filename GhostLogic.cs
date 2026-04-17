@@ -341,6 +341,13 @@ namespace PeekThrough
                 _ghostModeActive = false;
                 _ghostWindows.Clear();
                 _currentTargetHwnd = IntPtr.Zero;
+                _lastActivatedHwnd = IntPtr.Zero;
+
+                // Включаем подавление Win на короткое время после деактивации
+                // (также как в OnKeyUp, чтобы система не застряла в "Win held" состоянии)
+                _suppressWinKey = true;
+                _suppressWinTimer.Start();
+                DebugLogger.Log("DeactivateGhostMode: Started Win suppression timer");
             }
         }
         

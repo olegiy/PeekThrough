@@ -145,23 +145,31 @@ namespace PeekThrough
 
                         // Сбрасываем флаг после обработки
                         _keyPressedAfterActivation = false;
-                        
-                        // Подавление клавиши активации:
-                        // Если Ghost Mode активен или в задержке после деактивации — подавляем всё
-                        bool shouldSuppressGhost = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
-                        DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppressGhost));
-
-                        if (shouldSuppressGhost)
-                        {
-                            DebugLogger.Log("HookCallback: SUPPRESSING activation key event (Ghost Mode)!");
-                            return (IntPtr)1;
-                        }
-                        
-                        // No standalone KEYUP suppression - let the system handle short Win press
-                        // (Start menu will open naturally for short presses)
                     }
                     
-                    // Вызов обработчика с обработкой исключений через syncContext
+                    // Подавление клавиши активации:
+                    // Если Ghost Mode активен или в задержке после деактивации — подавляем всё
+                    bool shouldSuppressGhost = _ghostLogic != null && _ghostLogic.ShouldSuppressWinKey;
+                    DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppressGhost));
+
+                    if (shouldSuppressGhost)
+                    {
+                        DebugLogger.Log("HookCallback: SUPPRESSING activation key event (Ghost Mode)!");
+                        
+                        // KEYUP during Ghost Mode: fire handler for deactivation before suppressing
+                        if (wParam == (IntPtr)NativeMethods.WM_KEYUP && handler != null)
+                        {
+                            _syncContext.Post(state =>
+                            {
+                                try { handler(); }
+                                catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
+                            }, null);
+                        }
+                        
+                        return (IntPtr)1;
+                    }
+                    
+                    // Вызов обработчика с обработкой исключений через syncContext (when NOT suppressed)
                     if (handler != null)
                     {
                         _syncContext.Post(state =>
