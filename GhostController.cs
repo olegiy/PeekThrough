@@ -106,10 +106,10 @@ namespace PeekThrough
         }
 
         // Event handlers
-        private void OnGhostModeShouldActivate()
+        private bool OnGhostModeShouldActivate()
         {
             DebugLogger.Log("=== GhostController.OnGhostModeShouldActivate ===");
-            ActivateGhostMode();
+            return ActivateGhostMode();
         }
 
         private void OnGhostModeShouldDeactivate()
@@ -192,7 +192,7 @@ namespace PeekThrough
         }
 
         // Core Ghost Mode activation
-        private void ActivateGhostMode()
+        private bool ActivateGhostMode()
         {
             DebugLogger.Log("=== GhostController.ActivateGhostMode START ===");
 
@@ -201,14 +201,14 @@ namespace PeekThrough
             if (!NativeMethods.GetCursorPos(out cursorPos))
             {
                 DebugLogger.Log("ActivateGhostMode: Failed to get cursor position");
-                return;
+                return false;
             }
 
             IntPtr hwnd = NativeMethods.WindowFromPoint(cursorPos);
             if (hwnd == IntPtr.Zero)
             {
                 DebugLogger.Log("ActivateGhostMode: WindowFromPoint returned zero");
-                return;
+                return false;
             }
 
             // Get root window
@@ -219,7 +219,7 @@ namespace PeekThrough
             if (_transparencyManager.IsIgnoredWindowClass(hwnd))
             {
                 DebugLogger.Log("ActivateGhostMode: Ignored system window");
-                return;
+                return false;
             }
 
             // ActivationStateManager marks the mode active before this method runs so
@@ -232,7 +232,7 @@ namespace PeekThrough
             {
                 DebugLogger.Log("ActivateGhostMode: Same window, showing tooltip");
                 _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
-                return;
+                return true;
             }
 
             // Already active on different window
@@ -240,7 +240,7 @@ namespace PeekThrough
             {
                 DebugLogger.Log("ActivateGhostMode: Already active on different window, ignoring");
                 _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
-                return;
+                return true;
             }
 
             _currentTargetHwnd = hwnd;
@@ -258,11 +258,14 @@ namespace PeekThrough
                 _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
                 NativeMethods.Beep(BEEP_FREQUENCY_ACTIVATE, BEEP_DURATION_MS);
                 DebugLogger.Log("ActivateGhostMode: Window activated as ghost window");
+                return true;
             }
             catch (Exception ex)
             {
                 DebugLogger.Log(string.Format("ActivateGhostMode ERROR: {0}", ex.Message));
                 _transparencyManager.RestoreWindow(_currentTargetHwnd);
+                _currentTargetHwnd = IntPtr.Zero;
+                return false;
             }
         }
 

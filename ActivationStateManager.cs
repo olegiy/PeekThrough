@@ -15,7 +15,7 @@ namespace PeekThrough
     internal class ActivationStateManager : IDisposable
     {
         // Events
-        public event Action OnGhostModeShouldActivate;
+        public event Func<bool> OnGhostModeShouldActivate;
         public event Action OnGhostModeShouldDeactivate;
         public event Action OnActivationBlocked;
 
@@ -224,11 +224,21 @@ namespace PeekThrough
 
                 if (shouldActivate && !_ghostModeActive)
                 {
-                    _timerFired = true;
-                    DebugLogger.LogState(string.Format("ActivationStateManager: Timer fired, activating ({0})", _activationType), _isActivationKeyDown, _ghostModeActive, ShouldSuppressActivationKey, _timerFired);
-                    _ghostModeActive = true;
-                    if (OnGhostModeShouldActivate != null)
-                        OnGhostModeShouldActivate();
+                    bool activated = false;
+                    var activationHandler = OnGhostModeShouldActivate;
+                    if (activationHandler != null)
+                        activated = activationHandler();
+
+                    if (activated)
+                    {
+                        _timerFired = true;
+                        _ghostModeActive = true;
+                        DebugLogger.LogState(string.Format("ActivationStateManager: Timer fired, activating ({0})", _activationType), _isActivationKeyDown, _ghostModeActive, ShouldSuppressActivationKey, _timerFired);
+                    }
+                    else
+                    {
+                        DebugLogger.Log("ActivationStateManager: Activation rejected by controller");
+                    }
                 }
             }
         }
