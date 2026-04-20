@@ -1,83 +1,192 @@
-# 👻 Ghost Window (PeekThrough)
+# PeekThrough
 
-A lightweight, professional Windows utility that enhances multitasking by allowing you to "see through" windows and interact with content behind them without switching applications.
+PeekThrough is a lightweight Windows tray utility that makes the window under the cursor semi-transparent and click-through after a deliberate activation hold. It is meant for quick comparisons, reading behind overlays, and interacting with content under a temporary "ghosted" window without minimizing anything.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d7.svg)](https://www.microsoft.com/windows)
 [![.NET Framework: 4.0](https://img.shields.io/badge/.NET_Framework-4.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet-framework/net40)
 
-## 🌟 Overview
+## Overview
 
-**Ghost Window** (internally known as PeekThrough) is a system utility designed for power users, developers, and researchers. It solves the common friction of constant window switching (Alt+Tab) by providing a temporary "ghost mode" for any window.
+PeekThrough runs in the notification area and stays idle until you trigger Ghost Mode.
 
-When activated, the window under your cursor becomes semi-transparent and "click-through," allowing you to read data, compare documents, or even click buttons in the windows located directly behind it.
+When Ghost Mode activates, the root window currently under the cursor receives:
 
-## 🚀 Key Features
+- `WS_EX_LAYERED` for alpha transparency
+- `WS_EX_TRANSPARENT` so mouse clicks pass through it
 
-- **Multiple Activation Methods**: Choose between keyboard (`Win` key) or mouse button (middle, right, X1, X2) for activation.
-- **Dynamic Transparency**: Instantly toggles 70% transparency (customizable in source).
-- **Click-Through Functionality**: Mouse clicks pass through the "ghosted" window to the applications beneath.
-- **Multi-Window Support**: Hold activation button and hover over multiple windows to "ghost" them sequentially.
-- **Intelligent Filtering**: Automatically ignores system elements like the Taskbar and Desktop.
-- **Minimal Footprint**: Lightweight C# implementation with zero idle CPU usage.
-- **Audio-Visual Feedback**: Professional sound signals and on-screen tooltips indicate mode status.
-- **Customizable Settings**: Change activation method through system tray menu.
+The app ignores core shell windows such as the desktop and taskbar, restores modified window styles on exit, and keeps a small JSON settings file in `%APPDATA%\PeekThrough\settings.json`.
 
-## 🛠️ Technical Stack
+## Current Behavior
 
-- **Language**: C#
-- **Framework**: .NET Framework 4.0 (compatible with Windows 7, 8, 10, and 11)
-- **API**: Extensive use of **WinAPI (P/Invoke)** for:
-  - Low-level Keyboard Hooks (`WH_KEYBOARD_LL`)
-  - Window Style Manipulation (`WS_EX_LAYERED`, `WS_EX_TRANSPARENT`)
-  - Input Simulation
+- Long press the activation input for 1 second to activate Ghost Mode.
+- After activation, Ghost Mode stays active when you release the activation key.
+- While Ghost Mode is active, normal mouse interaction goes to the windows behind the ghosted window.
+- Press the activation key briefly again to deactivate Ghost Mode when keyboard activation is enabled.
+- Press `Esc` at any time during Ghost Mode for an immediate exit.
+- Use `Ctrl+Shift+Up` and `Ctrl+Shift+Down` to cycle opacity profiles.
 
-## 📖 Usage Guide
+## Activation Options
 
-Ghost Window is designed to stay out of your way until you need it.
+PeekThrough supports two activation modes:
 
-1. **Choose Activation Method**: Right-click the system tray icon and select your preferred activation method:
-   - **Keyboard**: Hold the **Windows Key (`LWin`)** for more than 1 second while hovering over a window.
-   - **Mouse**: Hold the selected mouse button (middle, right, X1, or X2) for more than 1 second while hovering over a window.
-2. **Activate Ghost Mode**:
-   - The window will become transparent.
-   - A tooltip `👻 Ghost Mode` will appear.
-   - You will hear a confirmation beep.
-3. **Interact Through Windows**: While holding the activation button, you can click on any content visible *behind* the ghosted window.
-4. **Deactivate**: Simply release the activation button. The window(s) will instantly return to their original state.
-5. **Switch Activation Method**: Right-click the system tray icon, select "Change Activation Method" and choose your preferred activation method.
+- Keyboard activation
+- Mouse activation
 
-## 📥 Installation
+### Keyboard activation
 
-### For End-Users (Binary)
-1. Download the latest `PeekThrough.exe` from the [Releases](https://github.com/olegiy/PeekThrough/releases) page.
-2. Run the executable. No installation is required.
-3. (Optional) Add a shortcut to your `Startup` folder to launch it with Windows.
+Available keyboard activation keys are intentionally limited to non-modifier keys and the Windows keys. This prevents the app from breaking standard shortcuts in other programs such as `Ctrl+C`, `Ctrl+V`, and `Ctrl+Z`.
 
-### For Developers (Build from Source)
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/olegiy/PeekThrough.git
-   ```
-2. Open the project folder.
-3. Build using the provided `compile.bat` or use the C# compiler directly:
-   ```bash
-   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /out:PeekThrough.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs GhostLogic.cs DebugLogger.cs
-   ```
-4. Alternatively, open the source files in **Visual Studio** and build as a Windows Forms Application.
+Current selectable keyboard keys include:
 
-## 🤝 Contributing
+- `Left Win`, `Right Win`
+- `Caps Lock`, `Tab`, `Space`, `Escape`, `` ` ``
+- `Insert`, `Delete`, `Home`, `End`, `Page Up`, `Page Down`
+- `0`-`9`
+- `F1`-`F12`
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+Modifier-only activation keys are rejected and normalized back to `Left Win`:
 
-## 📄 License
+- `Ctrl`
+- `Shift`
+- `Alt`
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Mouse activation
 
----
-*Created by [olegiy](https://github.com/olegiy)*
+Supported mouse buttons:
+
+- Middle button
+- Right button
+- X1 button
+- X2 button
+
+## Opacity Profiles
+
+PeekThrough ships with nine built-in opacity presets and persists the currently selected one in settings:
+
+- `10%`
+- `20%`
+- `30%`
+- `40%`
+- `50%`
+- `60%`
+- `70%`
+- `80%`
+- `90%`
+
+The default active profile is `10%` opacity.
+
+## Tray Menu
+
+The tray icon exposes the current runtime configuration:
+
+- `Activation Key`
+- `Activation Method`
+- `Exit`
+
+There is no main window. The notification icon is the primary UI.
+
+## Architecture
+
+The application is a small WinForms/Win32 hybrid built from focused single-purpose classes:
+
+- `Program.cs` - startup, tray menu, settings load/save, activation switching
+- `GhostController.cs` - central coordinator for activation, deactivation, tooltips, and profile changes
+- `ActivationStateManager.cs` - hold timers, activation state, suppression timing
+- `WindowTransparencyManager.cs` - Win32 style changes and restoration for ghosted windows
+- `KeyboardHook.cs` - low-level keyboard hook and keyboard hotkey handling
+- `MouseHook.cs` - low-level mouse hook for mouse-based activation
+- `ProfileManager.cs` - active opacity profile and profile cycling
+- `HotkeyManager.cs` - `Ctrl+Shift+Up/Down` profile shortcuts
+- `SettingsManager.cs` - JSON settings load/save and legacy settings migration
+- `NativeMethods.cs` - P/Invoke declarations and Win32 constants
+- `DebugLogger.cs` - file logging to `peekthrough_debug.log`
+
+## Settings Format
+
+Settings are stored in JSON v2 format:
+
+```json
+{
+  "Version": 2,
+  "Activation": {
+    "Type": "keyboard",
+    "KeyCode": 91,
+    "MouseButton": 4
+  },
+  "Profiles": {
+    "List": [
+      { "Id": "p10", "Name": "10%", "Opacity": 26 },
+      { "Id": "p20", "Name": "20%", "Opacity": 51 }
+    ],
+    "ActiveId": "p10"
+  },
+  "Hotkeys": {
+    "NextProfile": { "Ctrl": true, "Shift": true, "Alt": false, "Key": "Up" },
+    "PrevProfile": { "Ctrl": true, "Shift": true, "Alt": false, "Key": "Down" }
+  }
+}
+```
+
+Legacy line-based settings are migrated automatically and backed up as `.bak`.
+
+## Build
+
+There is no `.csproj` or solution file in the repository. The supported build path in this repo is `compile.bat`.
+
+### Quick build
+
+```bat
+compile.bat
+```
+
+### Manual build
+
+```bat
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:PeekThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+```
+
+## Regression Test
+
+The repository includes a small standalone regression test for keyboard hook behavior:
+
+- `KeyboardHookRegressionTest.cs`
+
+It currently verifies:
+
+- activation-state ordering inside `KeyboardHook`
+- rejection of modifier-only activation keys
+
+Run it with the .NET Framework compiler:
+
+```bat
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:exe /out:KeyboardHookRegressionTest.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll KeyboardHookRegressionTest.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs && KeyboardHookRegressionTest.exe
+```
+
+Expected result:
+
+```text
+PASS
+```
+
+## Installation
+
+### End users
+
+1. Download `PeekThrough.exe` from the Releases page or build it locally.
+2. Launch the executable.
+3. Optionally add a shortcut to Windows Startup.
+
+### Developers
+
+1. Clone the repository.
+2. Build with `compile.bat`.
+3. Run `PeekThrough.exe`.
+
+## Known Limitations
+
+- The repository currently tracks generated files such as `PeekThrough.exe`, `PeekThrough.pdb`, and `peekthrough_debug.log`.
+- The app relies on low-level global hooks and Win32 style manipulation, so it is Windows-only.
+- There is no installer, updater, or full automated test suite yet.
+- No `LICENSE` file is currently tracked in the repository root.
+
+Created by [olegiy](https://github.com/olegiy)

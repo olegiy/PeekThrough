@@ -2,7 +2,9 @@
 
 **Date:** 2026-04-17  
 **Topic:** GhostLogic.cs Decomposition + Profile/Hotkey Features  
-**Status:** Approved, pending implementation plan
+**Status:** Historical design document. The refactor has since been implemented, and current runtime behavior is documented in `README.md` and `AGENTS.md`.
+
+> Note: some details below reflect the design target from 2026-04-17 rather than the exact current implementation. In particular, default opacity presets, activation-key restrictions, and testing coverage have evolved.
 
 ---
 
