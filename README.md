@@ -1,6 +1,6 @@
 # PeekThrough
 
-PeekThrough is a lightweight Windows tray utility that makes the window under the cursor semi-transparent and click-through after a deliberate activation hold. It is meant for quick comparisons, reading behind overlays, and interacting with content under a temporary "ghosted" window without minimizing anything.
+PeekThrough is a lightweight Windows tray utility that lets you make the window under the cursor semi-transparent by holding the mouse button down for one second, allowing you to view the contents of other windows and the desktop beneath it. It is designed for quick interaction with content behind a window without needing to minimize anything.
 
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078d7.svg)](https://www.microsoft.com/windows)
 [![.NET Framework: 4.0](https://img.shields.io/badge/.NET_Framework-4.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet-framework/net40)
@@ -19,7 +19,7 @@ The app ignores core shell windows such as the desktop and taskbar, restores mod
 ## Current Behavior
 
 - Long press the activation input for 1 second to activate Ghost Mode.
-- After activation, Ghost Mode stays active when you release the activation key.
+- After Ghost Mode activates, you can release the activation key or button and it stays active until you cancel it.
 - While Ghost Mode is active, normal mouse interaction goes to the windows behind the ghosted window.
 - Press the activation key briefly again to deactivate Ghost Mode when keyboard activation is enabled.
 - Press `Esc` at any time during Ghost Mode for an immediate exit.
