@@ -235,13 +235,24 @@ namespace GhostThrough
                 return true;
             }
 
-            if (!settings.Profiles.List.Any(p => p.Id == settings.Profiles.ActiveId))
+            string activeId = settings.Profiles.ActiveId == null
+                ? null
+                : settings.Profiles.ActiveId.Trim();
+            ProfileData activeProfile = settings.Profiles.List.FirstOrDefault(
+                p => string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase));
+            if (activeProfile == null)
             {
                 settings.Profiles.ActiveId = settings.Profiles.List[0].Id;
                 changed = true;
             }
+            else if (!string.Equals(settings.Profiles.ActiveId, activeProfile.Id, StringComparison.Ordinal))
+            {
+                settings.Profiles.ActiveId = activeProfile.Id;
+                changed = true;
+            }
 
             return changed;
+
         }
 
         private static int NormalizeMouseButton(int mouseButton)

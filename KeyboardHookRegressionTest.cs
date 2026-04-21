@@ -46,8 +46,10 @@ namespace GhostThrough.Tests
                 ShouldClearActivationStateEvenWithoutTrackedGhostWindow();
                 ShouldNormalizeInvalidActivationSettingsOnLoad();
                 ShouldSanitizeInvalidProfilesOnLoad();
+                ShouldNormalizeProfileActiveIdOnLoad();
                 ShouldNormalizeInvalidActivationSettingsDuringV1Migration();
                 ShouldNotNotifyWhenSettingSameActiveProfile();
+
                 ShouldTreatKeyAsPressedImmediatelyAfterActivationKeyDown();
                 ShouldRejectModifierActivationKeysToAvoidShortcutBlocking();
                 ShouldFlushQueuedLogEntries();
@@ -270,6 +272,46 @@ namespace GhostThrough.Tests
             }
         }
 
+        private static void ShouldNormalizeProfileActiveIdOnLoad()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughActiveProfileSettingsTest_" + Guid.NewGuid().ToString("N"));
+            string settingsPath = Path.Combine(tempDir, "settings.json");
+
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+                var settings = new Settings();
+                settings.Profiles.List = new List<ProfileData>
+                {
+                    new ProfileData { Id = "p10", Name = "10%", Opacity = 26 },
+                    new ProfileData { Id = "p20", Name = "20%", Opacity = 51 }
+                };
+                settings.Profiles.ActiveId = "  P20  ";
+                File.WriteAllText(settingsPath, serializer.Serialize(settings));
+
+                var manager = new SettingsManager(settingsPath);
+                Settings loaded = manager.LoadSettings();
+
+                if (loaded.Profiles.ActiveId != "p20")
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not normalize ActiveId whitespace/casing to the matching profile ID.");
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
         private static void ShouldNormalizeInvalidActivationSettingsDuringV1Migration()
         {
             string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughLegacySettingsTest_" + Guid.NewGuid().ToString("N"));
@@ -322,6 +364,7 @@ namespace GhostThrough.Tests
                 }
             }
         }
+
 
         private static void ShouldConvertActivationTypeStrings()
         {
