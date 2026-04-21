@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     /// <summary>
     /// Manages opacity profiles (Min/Med/Max) with cycling support

@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal sealed class AppContext : IDisposable
     {

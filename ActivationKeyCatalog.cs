@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal static class ActivationKeyCatalog
     {

@@ -21,7 +21,7 @@ GhostThrough работает из области уведомлений и жд
 - `WS_EX_LAYERED` для альфа-прозрачности
 - `WS_EX_TRANSPARENT`, чтобы ввод мыши проходил сквозь окно
 
-Приложение игнорирует системные окна оболочки, такие как рабочий стол и панель задач, восстанавливает изменённые стили окон при выходе и хранит настройки в `%APPDATA%\PeekThrough\settings.json`.
+Приложение игнорирует системные окна оболочки, такие как рабочий стол и панель задач, восстанавливает изменённые стили окон при выходе и хранит настройки в `%APPDATA%\GhostThrough\settings.json`.
 
 ## Текущее поведение
 
@@ -138,12 +138,12 @@ GhostThrough поддерживает два режима активации:
 - `IActivationHost.cs` - небольшой контракт, который используют глобальные input hooks
 - `TooltipService.cs` - маленькая плавающая форма tooltip возле курсора
 - `NativeMethods.cs` - объявления Win32 API и константы
-- `DebugLogger.cs` - асинхронный файловый логгер для `peekthrough_debug.log`
+- `DebugLogger.cs` - асинхронный файловый логгер для `ghostthrough_debug.log`
 - `KeyboardHookRegressionTest.cs` - небольшой standalone regression test executable
 
 ## Формат настроек
 
-Настройки хранятся как JSON v2 в `%APPDATA%\PeekThrough\settings.json`:
+Настройки хранятся как JSON v2 в `%APPDATA%\GhostThrough\settings.json`:
 
 ```json
 {
@@ -170,6 +170,7 @@ GhostThrough поддерживает два режима активации:
 Примечания:
 
 - Старые построчные настройки автоматически мигрируют, а исходный файл сохраняется как `.bak`.
+- При первом запуске после переименования настройки копируются из `%APPDATA%\PeekThrough\settings.json` в `%APPDATA%\GhostThrough\settings.json`, если нового файла ещё нет.
 - Старый набор из трёх профилей по умолчанию автоматически обновляется до нового списка из девяти пресетов.
 - Секция `Hotkeys` сохраняется для совместимости, но на практике горячие клавиши профилей сейчас захардкожены в `HotkeyManager.cs`.
 
@@ -183,15 +184,13 @@ GhostThrough поддерживает два режима активации:
 compile.bat
 ```
 
-Если `PeekThrough.exe` уже запущен, перед пересборкой закройте его через трей, иначе компилятор не сможет перезаписать файл.
+Если `GhostThrough.exe` уже запущен, перед пересборкой закройте его через трей, иначе компилятор не сможет перезаписать файл.
 
 ### Ручная сборка
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:PeekThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
 ```
-
-Примечание: кодовая база и артефакты сборки пока ещё используют прежнее имя исполняемого файла `PeekThrough.exe`.
 
 ## Регрессионный тест
 
@@ -222,14 +221,15 @@ PASS
 
 ## Логирование
 
-- Отладочные логи пишутся в `peekthrough_debug.log` рядом с исполняемым файлом.
-- Установите переменную окружения `PEEKTHROUGH_LOG_LEVEL=INFO`, чтобы уменьшить объём подробного debug-логирования.
+- Отладочные логи пишутся в `ghostthrough_debug.log` рядом с исполняемым файлом.
+- Установите переменную окружения `GHOSTTHROUGH_LOG_LEVEL=INFO`, чтобы уменьшить объём подробного debug-логирования.
+- `PEEKTHROUGH_LOG_LEVEL` по-прежнему поддерживается как совместимый запасной вариант.
 
 ## Установка
 
 ### Для пользователей
 
-1. Скачайте `PeekThrough.exe` из Releases или соберите его локально.
+1. Скачайте `GhostThrough.exe` из Releases или соберите его локально.
 2. Запустите исполняемый файл.
 3. При желании добавьте ярлык в Windows Startup.
 
@@ -237,12 +237,12 @@ PASS
 
 1. Клонируйте репозиторий.
 2. Соберите проект через `compile.bat`.
-3. Запустите `PeekThrough.exe`.
+3. Запустите `GhostThrough.exe`.
 
 ## Известные ограничения
 
 - Приложение работает только на Windows и зависит от low-level global hooks и манипуляции Win32-стилями окон.
-- В репозитории сейчас отслеживаются сгенерированные файлы вроде `PeekThrough.exe`, `PeekThrough.pdb` и `peekthrough_debug.log`.
+- В репозитории сейчас отслеживаются сгенерированные файлы вроде `GhostThrough.exe`, `GhostThrough.pdb` и `ghostthrough_debug.log`.
 - По-прежнему нет installer, updater, `.csproj` и полноценного автоматизированного набора тестов.
 - В корне репозитория пока нет файла `LICENSE`.
 

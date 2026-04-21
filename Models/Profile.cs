@@ -1,4 +1,4 @@
-namespace PeekThrough.Models
+namespace GhostThrough.Models
 {
     /// <summary>
     /// Opacity profile for Ghost Mode

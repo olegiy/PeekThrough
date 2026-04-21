@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     /// <summary>
     /// Main coordinator that wires events between components and manages Ghost Mode flow

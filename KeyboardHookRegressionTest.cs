@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Threading;
 
-namespace PeekThrough.Tests
+namespace GhostThrough.Tests
 {
     internal static class KeyboardHookRegressionTest
     {
@@ -157,7 +157,7 @@ namespace PeekThrough.Tests
             DebugLogger.Log("test-log-entry");
             DebugLogger.Flush();
 
-            string logPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "peekthrough_debug.log");
+            string logPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ghostthrough_debug.log");
             string content = System.IO.File.ReadAllText(logPath);
 
             if (!content.Contains("test-log-entry"))

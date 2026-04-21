@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal static class DebugLogger
     {
@@ -17,7 +17,7 @@ namespace PeekThrough
 
         static DebugLogger()
         {
-            LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "peekthrough_debug.log");
+            LogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ghostthrough_debug.log");
             WriterThread = new Thread(WriteLoop);
             WriterThread.IsBackground = true;
             WriterThread.Start();
@@ -68,7 +68,11 @@ namespace PeekThrough
 
         private static bool ShouldLogDebugMessages()
         {
-            return !string.Equals(Environment.GetEnvironmentVariable("PEEKTHROUGH_LOG_LEVEL"), "INFO", StringComparison.OrdinalIgnoreCase);
+            string logLevel = Environment.GetEnvironmentVariable("GHOSTTHROUGH_LOG_LEVEL");
+            if (string.IsNullOrEmpty(logLevel))
+                logLevel = Environment.GetEnvironmentVariable("PEEKTHROUGH_LOG_LEVEL");
+
+            return !string.Equals(logLevel, "INFO", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void EnqueueLogLine(string message)

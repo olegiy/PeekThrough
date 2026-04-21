@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeekThrough.Models
+namespace GhostThrough.Models
 {
     /// <summary>
     /// Root settings container (v2 format - JSON)

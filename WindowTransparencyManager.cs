@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     /// <summary>
     /// Applies and restores window transparency via Win32 API

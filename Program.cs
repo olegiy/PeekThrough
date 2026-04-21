@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Windows.Forms;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal static class Program
     {
@@ -14,17 +14,16 @@ namespace PeekThrough
         private static Settings _settings;
         private static AppContext _appContext;
 
-        // Paths
-        private static readonly string SettingsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "PeekThrough",
-            "settings.json");
+        private const string AppDataFolderName = "GhostThrough";
+        private const string LegacyAppDataFolderName = "PeekThrough";
+        private const string SettingsFileName = "settings.json";
+        private const string SingleInstanceMutexName = "GhostThroughApp";
 
         [STAThread]
         static void Main()
         {
             // Ensure single instance
-            using (var mutex = new System.Threading.Mutex(false, "PeekThroughGhostModeApp"))
+            using (var mutex = new System.Threading.Mutex(false, SingleInstanceMutexName))
             {
                 if (!mutex.WaitOne(0, false))
                 {
@@ -34,7 +33,7 @@ namespace PeekThrough
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
 
-                _appContext = AppContext.Create(SettingsPath);
+                _appContext = AppContext.Create(ResolveSettingsPath());
                 _controller = _appContext.Controller;
                 _keyboardHook = _appContext.KeyboardHook;
                 _mouseHook = _appContext.MouseHook;
@@ -52,6 +51,32 @@ namespace PeekThrough
                 if (_appContext != null)
                     _appContext.Shutdown();
             }
+        }
+
+        private static string ResolveSettingsPath()
+        {
+            string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string currentSettingsPath = Path.Combine(appDataPath, AppDataFolderName, SettingsFileName);
+            string legacySettingsPath = Path.Combine(appDataPath, LegacyAppDataFolderName, SettingsFileName);
+
+            if (File.Exists(currentSettingsPath) || !File.Exists(legacySettingsPath))
+                return currentSettingsPath;
+
+            try
+            {
+                string currentSettingsDir = Path.GetDirectoryName(currentSettingsPath);
+                if (!Directory.Exists(currentSettingsDir))
+                    Directory.CreateDirectory(currentSettingsDir);
+
+                File.Copy(legacySettingsPath, currentSettingsPath, false);
+                DebugLogger.LogInfo(string.Format("Program: Migrated settings from {0} to {1}", legacySettingsPath, currentSettingsPath));
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogInfo(string.Format("Program: Settings migration skipped - {0}", ex.Message));
+            }
+
+            return currentSettingsPath;
         }
 
         private static void SubscribeHookEvents()

@@ -1,6 +1,6 @@
 using System;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal static class ActivationTypeExtensions
     {

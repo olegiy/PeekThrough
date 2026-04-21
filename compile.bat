@@ -1,5 +1,5 @@
 @echo off
-echo Building PeekThrough...
+echo Building GhostThrough...
 
 set "CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if not exist "%CSC%" (
@@ -8,7 +8,7 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-set "OUTPUT=PeekThrough.exe"
+set "OUTPUT=GhostThrough.exe"
 if exist "%OUTPUT%" (
     echo Removing old executable...
     del "%OUTPUT%"

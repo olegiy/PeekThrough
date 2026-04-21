@@ -1,6 +1,6 @@
 using System;
 
-namespace PeekThrough.Models
+namespace GhostThrough.Models
 {
     /// <summary>
     /// Stores the state of a window in Ghost Mode for later restoration

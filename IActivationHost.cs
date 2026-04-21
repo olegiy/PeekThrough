@@ -1,4 +1,4 @@
-namespace PeekThrough
+namespace GhostThrough
 {
     internal interface IActivationHost
     {

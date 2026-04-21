@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     /// <summary>
     /// Shows and hides the "Ghost Mode" tooltip

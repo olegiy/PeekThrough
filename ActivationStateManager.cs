@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal enum ActivationInputType
     {

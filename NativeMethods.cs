@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Drawing;
 using System.Text;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal static class NativeMethods
     {

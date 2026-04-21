@@ -21,7 +21,7 @@ When Ghost Mode activates, the root window under the cursor receives:
 - `WS_EX_LAYERED` for alpha transparency
 - `WS_EX_TRANSPARENT` so mouse input passes through it
 
-The app ignores shell windows such as the desktop and taskbar, restores modified window styles on exit, and stores settings in `%APPDATA%\PeekThrough\settings.json`.
+The app ignores shell windows such as the desktop and taskbar, restores modified window styles on exit, and stores settings in `%APPDATA%\GhostThrough\settings.json`.
 
 ## Current Behavior
 
@@ -138,12 +138,12 @@ The app is a small WinForms/Win32 utility split into focused classes:
 - `IActivationHost.cs` - small contract used by global input hooks
 - `TooltipService.cs` - small floating tooltip form shown near the cursor
 - `NativeMethods.cs` - Win32 API declarations and constants
-- `DebugLogger.cs` - asynchronous file logger for `peekthrough_debug.log`
+- `DebugLogger.cs` - asynchronous file logger for `ghostthrough_debug.log`
 - `KeyboardHookRegressionTest.cs` - small standalone regression test executable
 
 ## Settings Format
 
-Settings are stored as JSON v2 in `%APPDATA%\PeekThrough\settings.json`:
+Settings are stored as JSON v2 in `%APPDATA%\GhostThrough\settings.json`:
 
 ```json
 {
@@ -170,6 +170,7 @@ Settings are stored as JSON v2 in `%APPDATA%\PeekThrough\settings.json`:
 Notes:
 
 - Old line-based settings are migrated automatically and the original file is backed up as `.bak`.
+- On first run after the rename, settings are copied from `%APPDATA%\PeekThrough\settings.json` to `%APPDATA%\GhostThrough\settings.json` if the new file does not exist yet.
 - Legacy three-profile defaults are upgraded automatically to the new nine-profile preset list.
 - The `Hotkeys` section is persisted for compatibility, but profile hotkeys are currently hardcoded in `HotkeyManager.cs`.
 
@@ -183,15 +184,13 @@ There is no `.csproj` or solution file in the repository. The supported build pa
 compile.bat
 ```
 
-If `PeekThrough.exe` is currently running, exit it from the tray before rebuilding, otherwise the compiler cannot overwrite the file.
+If `GhostThrough.exe` is currently running, exit it from the tray before rebuilding, otherwise the compiler cannot overwrite the file.
 
 ### Manual build
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:PeekThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
 ```
-
-Note: the codebase and build artifacts still use the legacy executable name `PeekThrough.exe` at the moment.
 
 ## Regression Test
 
@@ -222,14 +221,15 @@ PASS
 
 ## Logging
 
-- Debug logs are written to `peekthrough_debug.log` next to the executable.
-- Set environment variable `PEEKTHROUGH_LOG_LEVEL=INFO` to reduce verbose debug logging.
+- Debug logs are written to `ghostthrough_debug.log` next to the executable.
+- Set environment variable `GHOSTTHROUGH_LOG_LEVEL=INFO` to reduce verbose debug logging.
+- `PEEKTHROUGH_LOG_LEVEL` is still accepted as a backward-compatible fallback.
 
 ## Installation
 
 ### End users
 
-1. Download `PeekThrough.exe` from Releases or build it locally.
+1. Download `GhostThrough.exe` from Releases or build it locally.
 2. Launch the executable.
 3. Optionally add a shortcut to Windows Startup.
 
@@ -237,12 +237,12 @@ PASS
 
 1. Clone the repository.
 2. Build with `compile.bat`.
-3. Run `PeekThrough.exe`.
+3. Run `GhostThrough.exe`.
 
 ## Known Limitations
 
 - The app is Windows-only and depends on low-level global hooks plus Win32 style manipulation.
-- The repository currently tracks generated files such as `PeekThrough.exe`, `PeekThrough.pdb`, and `peekthrough_debug.log`.
+- The repository currently tracks generated files such as `GhostThrough.exe`, `GhostThrough.pdb`, and `ghostthrough_debug.log`.
 - There is still no installer, updater, `.csproj`, or broad automated test suite.
 - No `LICENSE` file is currently tracked in the repository root.
 

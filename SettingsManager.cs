@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Web.Script.Serialization;
-using PeekThrough.Models;
+using GhostThrough.Models;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     /// <summary>
     /// Loads, saves, and migrates settings from v1 (pseudo-JSON) to v2 (real JSON)

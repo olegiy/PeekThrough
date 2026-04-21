@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Windows.Forms;
 
-namespace PeekThrough
+namespace GhostThrough
 {
     internal sealed class TrayMenuController : IDisposable
     {
@@ -13,7 +13,7 @@ namespace PeekThrough
         {
             _appContext = appContext;
             _trayIcon = new NotifyIcon();
-            _trayIcon.Text = "PeekThrough Ghost Mode";
+            _trayIcon.Text = "GhostThrough Ghost Mode";
 
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "icons", "icon.ico");
             if (File.Exists(iconPath))
