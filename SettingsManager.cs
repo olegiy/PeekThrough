@@ -126,7 +126,7 @@ namespace PeekThrough
             string typeStr;
             int type;
             if (v1.TryGetValue("ActivationType", out typeStr) && int.TryParse(typeStr, out type))
-                settings.Activation.Type = type == 0 ? "keyboard" : "mouse";
+                settings.Activation.Type = (type == 0 ? ActivationInputType.Keyboard : ActivationInputType.Mouse).ToSettingsValue();
 
             string mouseStr;
             int mouseButton;

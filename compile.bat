@@ -14,7 +14,7 @@ if exist "%OUTPUT%" (
     del "%OUTPUT%"
 )
 
-set "SOURCES=Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs"
+set "SOURCES=Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs"
 
 echo Compiling...
 "%CSC%" /nologo /target:winexe /out:"%OUTPUT%" ^

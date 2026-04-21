@@ -12,7 +12,7 @@ namespace PeekThrough
         private IntPtr _hookID = IntPtr.Zero;
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
-        private GhostController _ghostController;
+        private IActivationHost _activationHost;
         private readonly object _lockObject = new object();
         
         // Отслеживание нажатых кнопок мыши
@@ -33,9 +33,9 @@ namespace PeekThrough
         // Событие для уведомления о нажатии другой кнопки мыши перед выбранной
         public event Action OnOtherMouseButtonPressedBeforeSelected;
 
-        public MouseHook(GhostController ghostController, int selectedMouseButton = NativeMethods.VK_MBUTTON)
+        public MouseHook(IActivationHost activationHost, int selectedMouseButton = NativeMethods.VK_MBUTTON)
         {
-            _ghostController = ghostController;
+            _activationHost = activationHost;
             _selectedMouseButton = selectedMouseButton;
             _proc = HookCallback;
             _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
@@ -80,65 +80,10 @@ namespace PeekThrough
         {
             if (nCode >= 0)
             {
-                // Определяем тип сообщения мыши
-                int mouseMessage = (int)wParam;
-                
-                // Определяем, какая кнопка мыши была нажата
-                int mouseButton = 0;
-                bool isButtonDown = false;
-                bool isButtonUp = false;
-                
-                switch (mouseMessage)
-                {
-                    case NativeMethods.WM_LBUTTONDOWN:
-                        mouseButton = NativeMethods.VK_LBUTTON;
-                        isButtonDown = true;
-                        break;
-                    case NativeMethods.WM_LBUTTONUP:
-                        mouseButton = NativeMethods.VK_LBUTTON;
-                        isButtonUp = true;
-                        break;
-                    case NativeMethods.WM_RBUTTONDOWN:
-                        mouseButton = NativeMethods.VK_RBUTTON;
-                        isButtonDown = true;
-                        break;
-                    case NativeMethods.WM_RBUTTONUP:
-                        mouseButton = NativeMethods.VK_RBUTTON;
-                        isButtonUp = true;
-                        break;
-                    case NativeMethods.WM_MBUTTONDOWN:
-                        mouseButton = NativeMethods.VK_MBUTTON;
-                        isButtonDown = true;
-                        break;
-                    case NativeMethods.WM_MBUTTONUP:
-                        mouseButton = NativeMethods.VK_MBUTTON;
-                        isButtonUp = true;
-                        break;
-                    case NativeMethods.WM_XBUTTONDOWN:
-                        {
-                            // Определяем, какая из дополнительных кнопок X1 или X2
-                            var hookStruct = (NativeMethods.MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(NativeMethods.MSLLHOOKSTRUCT));
-                            int xButton = (hookStruct.mouseData >> 16) & 0xFFFF;
-                            if (xButton == NativeMethods.XBUTTON1)
-                                mouseButton = NativeMethods.VK_XBUTTON1;
-                            else if (xButton == NativeMethods.XBUTTON2)
-                                mouseButton = NativeMethods.VK_XBUTTON2;
-                            isButtonDown = true;
-                        }
-                        break;
-                    case NativeMethods.WM_XBUTTONUP:
-                        {
-                            // Определяем, какая из дополнительных кнопок X1 или X2
-                            var hookStruct = (NativeMethods.MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(NativeMethods.MSLLHOOKSTRUCT));
-                            int xButton = (hookStruct.mouseData >> 16) & 0xFFFF;
-                            if (xButton == NativeMethods.XBUTTON1)
-                                mouseButton = NativeMethods.VK_XBUTTON1;
-                            else if (xButton == NativeMethods.XBUTTON2)
-                                mouseButton = NativeMethods.VK_XBUTTON2;
-                            isButtonUp = true;
-                        }
-                        break;
-                }
+                int mouseButton;
+                bool isButtonDown;
+                bool isButtonUp;
+                ResolveMouseButton(wParam, lParam, out mouseButton, out isButtonDown, out isButtonUp);
                 
                 // Считываем текущую selected кнопку (volatile)
                 int currentSelectedButton = _selectedMouseButton;
@@ -162,14 +107,7 @@ namespace PeekThrough
                             {
                                 DebugLogger.Log(string.Format("HookCallback: Other mouse buttons pressed before selected ({0}), blocking Ghost Mode", _pressedMouseButtons.Count));
                                 var handlerBlocked = OnOtherMouseButtonPressedBeforeSelected;
-                                if (handlerBlocked != null)
-                                {
-                                    _syncContext.Post(state =>
-                                    {
-                                        try { handlerBlocked(); }
-                                        catch (Exception ex) { DebugLogger.Log(string.Format("OtherMouseButton handler error: {0}", ex.Message)); }
-                                    }, null);
-                                }
+                                PostHandler(handlerBlocked, "OtherMouseButton handler error");
                             }
                             else
                             {
@@ -185,14 +123,7 @@ namespace PeekThrough
                                 DebugLogger.Log("HookCallback: Selected mouse button released but other button was pressed after - blocking Ghost Mode");
                                 // Блокируем активацию Ghost Mode
                                 var handlerBlocked = OnOtherMouseButtonPressedBeforeSelected;
-                                if (handlerBlocked != null)
-                                {
-                                    _syncContext.Post(state =>
-                                    {
-                                        try { handlerBlocked(); }
-                                        catch (Exception ex) { DebugLogger.Log(string.Format("OtherMouseButton handler error on selected button release: {0}", ex.Message)); }
-                                    }, null);
-                                }
+                                PostHandler(handlerBlocked, "OtherMouseButton handler error on selected button release");
                             }
                             else
                             {
@@ -206,14 +137,7 @@ namespace PeekThrough
                     }
 
                     // Вызов обработчика с обработкой исключений через syncContext
-                    if (handler != null)
-                    {
-                        _syncContext.Post(state =>
-                        {
-                            try { handler(); }
-                            catch (Exception ex) { DebugLogger.Log(string.Format("Mouse hook handler error: {0}", ex.Message)); }
-                        }, null);
-                    }
+                    PostHandler(handler, "Mouse hook handler error");
                 }
                 else
                 {
@@ -226,7 +150,7 @@ namespace PeekThrough
                             DebugLogger.Log(string.Format("HookCallback: Other mouse button DOWN, button={0}, total pressed: {1}", mouseButton, _pressedMouseButtons.Count));
 
                             // Если выбранная кнопка мыши сейчас нажата, отмечаем что другая кнопка нажата ПОСЛЕ неё
-                            if (_ghostController != null && _isMouseButtonDown)
+                            if (_activationHost != null && _isMouseButtonDown)
                             {
                                 _mouseButtonPressedAfterSelected = true;
                                 DebugLogger.Log("HookCallback: Other mouse button pressed AFTER selected - will block Ghost Mode");
@@ -263,6 +187,62 @@ namespace PeekThrough
         public int SelectedMouseButton
         {
             get { return _selectedMouseButton; }
+        }
+
+        private static void ResolveMouseButton(IntPtr wParam, IntPtr lParam, out int mouseButton, out bool isButtonDown, out bool isButtonUp)
+        {
+            int mouseMessage = (int)wParam;
+            mouseButton = 0;
+            isButtonDown = false;
+            isButtonUp = false;
+
+            switch (mouseMessage)
+            {
+                case NativeMethods.WM_LBUTTONDOWN:
+                    mouseButton = NativeMethods.VK_LBUTTON;
+                    isButtonDown = true;
+                    break;
+                case NativeMethods.WM_LBUTTONUP:
+                    mouseButton = NativeMethods.VK_LBUTTON;
+                    isButtonUp = true;
+                    break;
+                case NativeMethods.WM_RBUTTONDOWN:
+                    mouseButton = NativeMethods.VK_RBUTTON;
+                    isButtonDown = true;
+                    break;
+                case NativeMethods.WM_RBUTTONUP:
+                    mouseButton = NativeMethods.VK_RBUTTON;
+                    isButtonUp = true;
+                    break;
+                case NativeMethods.WM_MBUTTONDOWN:
+                    mouseButton = NativeMethods.VK_MBUTTON;
+                    isButtonDown = true;
+                    break;
+                case NativeMethods.WM_MBUTTONUP:
+                    mouseButton = NativeMethods.VK_MBUTTON;
+                    isButtonUp = true;
+                    break;
+                case NativeMethods.WM_XBUTTONDOWN:
+                case NativeMethods.WM_XBUTTONUP:
+                    var hookStruct = (NativeMethods.MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(NativeMethods.MSLLHOOKSTRUCT));
+                    int xButton = (hookStruct.mouseData >> 16) & 0xFFFF;
+                    mouseButton = xButton == NativeMethods.XBUTTON1 ? NativeMethods.VK_XBUTTON1 : NativeMethods.VK_XBUTTON2;
+                    isButtonDown = mouseMessage == NativeMethods.WM_XBUTTONDOWN;
+                    isButtonUp = mouseMessage == NativeMethods.WM_XBUTTONUP;
+                    break;
+            }
+        }
+
+        private void PostHandler(Action handler, string label)
+        {
+            if (handler == null)
+                return;
+
+            _syncContext.Post(state =>
+            {
+                try { handler(); }
+                catch (Exception ex) { DebugLogger.Log(string.Format("{0}: {1}", label, ex.Message)); }
+            }, null);
         }
     }
 }

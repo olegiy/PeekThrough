@@ -33,6 +33,8 @@ project.lock.json
 
 # --- Logs ---
 *.log
+compile_errors.txt
+KeyboardHookRegressionTest.exe
 
 # --- Environment & Secrets ---
 .env

@@ -13,7 +13,7 @@ namespace PeekThrough
         private IntPtr _hookID = IntPtr.Zero;
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
-        private GhostController _ghostController;
+        private IActivationHost _activationHost;
 
         // Modifier key tracking
         private bool _ctrlPressed;
@@ -29,9 +29,9 @@ namespace PeekThrough
         public event Action OnActivationKeyUp;
         public event Action OnOtherKeyPressedBeforeActivation;
 
-        public KeyboardHook(GhostController ghostController)
+        public KeyboardHook(IActivationHost activationHost)
         {
-            _ghostController = ghostController;
+            _activationHost = activationHost;
             _proc = HookCallback;
             _syncContext = SynchronizationContext.Current;
             if (_syncContext == null)
@@ -102,8 +102,8 @@ namespace PeekThrough
 
                 // Process activation key
                 int activationKey = NativeMethods.VK_LWIN;
-                if (_ghostController != null)
-                    activationKey = _ghostController.ActivationKeyCode;
+                if (_activationHost != null)
+                    activationKey = _activationHost.ActivationKeyCode;
                 bool isActivationKey = (vkCode == activationKey);
 
                 if (isActivationKey)
@@ -130,14 +130,14 @@ namespace PeekThrough
 
         private bool TryProcessHotkey(int vkCode, bool isKeyDown)
         {
-            if (!isKeyDown || _ghostController == null)
+            if (!isKeyDown || _activationHost == null)
                 return false;
 
             // Don't process hotkeys if we're in the middle of activation key handling
             if (_isActivationKeyDown)
                 return false;
 
-            return _ghostController.ProcessHotkey(vkCode, isKeyDown, _ctrlPressed, _shiftPressed, _altPressed);
+            return _activationHost.ProcessHotkey(vkCode, isKeyDown, _ctrlPressed, _shiftPressed, _altPressed);
         }
 
         private IntPtr ProcessActivationKey(int nCode, IntPtr wParam, IntPtr lParam, int vkCode)
@@ -155,14 +155,7 @@ namespace PeekThrough
                 {
                     DebugLogger.Log(string.Format("HookCallback: Other keys pressed before activation ({0}), blocking", _pressedKeys.Count));
                     var handlerBlocked = OnOtherKeyPressedBeforeActivation;
-                    if (handlerBlocked != null)
-                    {
-                        _syncContext.Post(state =>
-                        {
-                            try { handlerBlocked(); }
-                            catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error: {0}", ex.Message)); }
-                        }, null);
-                    }
+                    PostHandler(handlerBlocked, "OtherKey handler error");
                 }
                 else
                 {
@@ -178,14 +171,7 @@ namespace PeekThrough
                 {
                     DebugLogger.Log("HookCallback: Key pressed after activation - blocking");
                     var handlerBlocked = OnOtherKeyPressedBeforeActivation;
-                    if (handlerBlocked != null)
-                    {
-                        _syncContext.Post(state =>
-                        {
-                            try { handlerBlocked(); }
-                            catch (Exception ex) { DebugLogger.Log(string.Format("OtherKey handler error on release: {0}", ex.Message)); }
-                        }, null);
-                    }
+                    PostHandler(handlerBlocked, "OtherKey handler error on release");
                 }
                 else
                 {
@@ -196,34 +182,20 @@ namespace PeekThrough
             }
 
             // Check if we should suppress the activation key
-            bool shouldSuppress = _ghostController != null && _ghostController.ShouldSuppressWinKey;
+            bool shouldSuppress = _activationHost != null && _activationHost.ShouldSuppressActivationKey;
             DebugLogger.Log(string.Format("HookCallback: ShouldSuppressWinKey = {0}", shouldSuppress));
 
             if (shouldSuppress)
             {
                 DebugLogger.Log("HookCallback: SUPPRESSING activation key event!");
 
-                if (handler != null)
-                {
-                    _syncContext.Post(state =>
-                    {
-                        try { handler(); }
-                        catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
-                    }, null);
-                }
+                PostHandler(handler, "Hook handler error");
 
                 return (IntPtr)1;
             }
 
             // Not suppressed - fire handler normally
-            if (handler != null)
-            {
-                _syncContext.Post(state =>
-                {
-                    try { handler(); }
-                    catch (Exception ex) { DebugLogger.Log(string.Format("Hook handler error: {0}", ex.Message)); }
-                }, null);
-            }
+            PostHandler(handler, "Hook handler error");
 
             return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
         }
@@ -242,14 +214,10 @@ namespace PeekThrough
                 }
 
                 // Escape during Ghost Mode - quick exit
-                if (_ghostController != null && _ghostController.IsGhostModeActive && vkCode == NativeMethods.VK_ESCAPE)
+                if (_activationHost != null && _activationHost.IsGhostModeActive && vkCode == NativeMethods.VK_ESCAPE)
                 {
                     DebugLogger.Log("HookCallback: Escape pressed while Ghost Mode active");
-                    _syncContext.Post(state =>
-                    {
-                        try { _ghostController.DeactivateGhostMode(); }
-                        catch (Exception ex) { DebugLogger.Log(string.Format("DeactivateGhostMode error: {0}", ex.Message)); }
-                    }, null);
+                    PostHandler(_activationHost.RequestDeactivate, "DeactivateGhostMode error");
                 }
             }
             else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
@@ -259,6 +227,18 @@ namespace PeekThrough
             }
 
             return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+        }
+
+        private void PostHandler(Action handler, string label)
+        {
+            if (handler == null)
+                return;
+
+            _syncContext.Post(state =>
+            {
+                try { handler(); }
+                catch (Exception ex) { DebugLogger.Log(string.Format("{0}: {1}", label, ex.Message)); }
+            }, null);
         }
     }
 }

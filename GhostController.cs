@@ -11,7 +11,7 @@ namespace PeekThrough
     /// Main coordinator that wires events between components and manages Ghost Mode flow
     /// Replaces GhostLogic (770 lines) with focused single-responsibility delegation
     /// </summary>
-    internal class GhostController : IDisposable
+    internal class GhostController : IDisposable, IActivationHost
     {
         // Components
         private readonly WindowTransparencyManager _transparencyManager;
@@ -32,30 +32,14 @@ namespace PeekThrough
         // Disposable tracking
         private bool _disposed = false;
 
-        // Public properties
-        public WindowTransparencyManager TransparencyManager
-        {
-            get { return _transparencyManager; }
-        }
-
-        public ActivationStateManager ActivationState
-        {
-            get { return _activationState; }
-        }
-
-        public ProfileManager ProfileManager
-        {
-            get { return _profileManager; }
-        }
-
-        public HotkeyManager HotkeyManager
-        {
-            get { return _hotkeyManager; }
-        }
-
         public bool IsGhostModeActive
         {
             get { return _activationState.IsGhostModeActive; }
+        }
+
+        public bool ShouldSuppressActivationKey
+        {
+            get { return _activationState.ShouldSuppressActivationKey; }
         }
 
         public bool ShouldSuppressWinKey
@@ -150,29 +134,55 @@ namespace PeekThrough
         }
 
         // Public methods called by hooks
+        public void OnActivationInputDown()
+        {
+            if (CurrentActivationType == ActivationInputType.Mouse)
+                _activationState.OnMouseButtonDown();
+            else
+                _activationState.OnActivationKeyDown();
+        }
+
+        public void OnActivationInputUp()
+        {
+            if (CurrentActivationType == ActivationInputType.Mouse)
+                _activationState.OnMouseButtonUp();
+            else
+                _activationState.OnActivationKeyUp();
+        }
+
+        public void OnOtherInputBeforeActivation()
+        {
+            _activationState.BlockActivation();
+        }
+
+        public void RequestDeactivate()
+        {
+            DeactivateGhostMode();
+        }
+
         public void OnKeyDown()
         {
-            _activationState.OnActivationKeyDown();
+            OnActivationInputDown();
         }
 
         public void OnKeyUp()
         {
-            _activationState.OnActivationKeyUp();
+            OnActivationInputUp();
         }
 
         public void OnMouseButtonDown()
         {
-            _activationState.OnMouseButtonDown();
+            OnActivationInputDown();
         }
 
         public void OnMouseButtonUp()
         {
-            _activationState.OnMouseButtonUp();
+            OnActivationInputUp();
         }
 
         public void BlockGhostMode()
         {
-            _activationState.BlockActivation();
+            OnOtherInputBeforeActivation();
         }
 
         public void DeactivateGhostMode()
@@ -253,7 +263,7 @@ namespace PeekThrough
             if (hasTrackedGhostWindow && hwnd == _currentTargetHwnd)
             {
                 DebugLogger.Log("ActivateGhostMode: Same window, showing tooltip");
-                _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
+                ShowTooltip(cursorPos);
                 return true;
             }
 
@@ -261,7 +271,7 @@ namespace PeekThrough
             if (hasTrackedGhostWindow)
             {
                 DebugLogger.Log("ActivateGhostMode: Already active on different window, ignoring");
-                _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
+                ShowTooltip(cursorPos);
                 return true;
             }
 
@@ -277,7 +287,7 @@ namespace PeekThrough
             try
             {
                 _transparencyManager.ApplyTransparency(_currentTargetHwnd, _profileManager.CurrentOpacity);
-                _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
+                ShowTooltip(cursorPos);
                 NativeMethods.Beep(BEEP_FREQUENCY_ACTIVATE, BEEP_DURATION_MS);
                 DebugLogger.Log("ActivateGhostMode: Window activated as ghost window");
                 return true;
@@ -306,7 +316,7 @@ namespace PeekThrough
                 Point cursorPos;
                 if (NativeMethods.GetCursorPos(out cursorPos))
                 {
-                    _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
+                    ShowTooltip(cursorPos);
                 }
 
                 DebugLogger.Log(string.Format("GhostController: Refreshed transparency with {0} opacity", _profileManager.CurrentOpacity));
@@ -345,6 +355,11 @@ namespace PeekThrough
             inputs[2].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
 
             NativeMethods.SendInput(3, inputs, NativeMethods.INPUT.Size);
+        }
+
+        private void ShowTooltip(Point cursorPos)
+        {
+            _tooltipService.Show(cursorPos, string.Format("Ghost Mode - {0}", _profileManager.ActiveProfile.Name));
         }
 
         public void Dispose()

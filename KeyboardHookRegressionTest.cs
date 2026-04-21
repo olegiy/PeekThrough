@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 using System.Threading;
@@ -36,8 +37,12 @@ namespace PeekThrough.Tests
 
             try
             {
+                ShouldConvertActivationTypeStrings();
+                ShouldExposeKnownActivationKeys();
+                ShouldExposeControllerThroughActivationHost();
                 ShouldTreatKeyAsPressedImmediatelyAfterActivationKeyDown();
                 ShouldRejectModifierActivationKeysToAvoidShortcutBlocking();
+                ShouldFlushQueuedLogEntries();
                 Console.WriteLine("PASS");
                 return 0;
             }
@@ -78,6 +83,37 @@ namespace PeekThrough.Tests
             }
         }
 
+        private static void ShouldConvertActivationTypeStrings()
+        {
+            if ("keyboard".ToActivationInputType() != ActivationInputType.Keyboard)
+            {
+                throw new InvalidOperationException("FAIL: keyboard string did not map to ActivationInputType.Keyboard.");
+            }
+
+            if ("mouse".ToActivationInputType() != ActivationInputType.Mouse)
+            {
+                throw new InvalidOperationException("FAIL: mouse string did not map to ActivationInputType.Mouse.");
+            }
+
+            if (ActivationInputType.Keyboard.ToSettingsValue() != "keyboard")
+            {
+                throw new InvalidOperationException("FAIL: ActivationInputType.Keyboard did not serialize to keyboard.");
+            }
+        }
+
+        private static void ShouldExposeKnownActivationKeys()
+        {
+            if (!ActivationKeyCatalog.AvailableKeys.Contains(NativeMethods.VK_LWIN))
+            {
+                throw new InvalidOperationException("FAIL: ActivationKeyCatalog does not expose Left Win.");
+            }
+
+            if (ActivationKeyCatalog.GetDisplayName(NativeMethods.VK_ESCAPE) != "Escape")
+            {
+                throw new InvalidOperationException("FAIL: ActivationKeyCatalog display name for Escape changed unexpectedly.");
+            }
+        }
+
         private static void ShouldRejectModifierActivationKeysToAvoidShortcutBlocking()
         {
             var controller = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
@@ -98,12 +134,44 @@ namespace PeekThrough.Tests
             }
         }
 
-        private static KeyboardHook CreateKeyboardHookForTest(GhostController controller, SynchronizationContext syncContext)
+        private static void ShouldExposeControllerThroughActivationHost()
+        {
+            IActivationHost host = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
+
+            try
+            {
+                if (host.ActivationKeyCode != NativeMethods.VK_LWIN)
+                {
+                    throw new InvalidOperationException("FAIL: IActivationHost did not expose the default activation key.");
+                }
+            }
+            finally
+            {
+                ((GhostController)host).Dispose();
+            }
+        }
+
+        private static void ShouldFlushQueuedLogEntries()
+        {
+            DebugLogger.ClearLog();
+            DebugLogger.Log("test-log-entry");
+            DebugLogger.Flush();
+
+            string logPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "peekthrough_debug.log");
+            string content = System.IO.File.ReadAllText(logPath);
+
+            if (!content.Contains("test-log-entry"))
+            {
+                throw new InvalidOperationException("FAIL: DebugLogger.Flush did not persist queued entries.");
+            }
+        }
+
+        private static KeyboardHook CreateKeyboardHookForTest(IActivationHost host, SynchronizationContext syncContext)
         {
             var hook = (KeyboardHook)FormatterServices.GetUninitializedObject(typeof(KeyboardHook));
 
             SetPrivateField(hook, "_syncContext", syncContext);
-            SetPrivateField(hook, "_ghostController", controller);
+            SetPrivateField(hook, "_activationHost", host);
             SetPrivateField(hook, "_pressedKeys", new HashSet<int>());
             SetPrivateField(hook, "_hookID", IntPtr.Zero);
             SetPrivateField(hook, "_disposed", false);
