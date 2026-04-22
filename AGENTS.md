@@ -62,6 +62,7 @@ bin\Release\net8.0-windows\KeyboardHookRegressionTest.exe
 ## Current Plan
 - Stabilize UI behavior around tray interactions and Ghost Mode activation/deactivation flows
 - Expand automated and manual test coverage for Ghost Mode scenarios
+- Handle keyboard handoff during Win-hold activation: if the user presses any additional key while holding the activation key, immediately cancel/disable Ghost Mode activation and pass keyboard input through to the OS/app without suppression
 
 ## Known Issues
 - `GhostThrough.exe` and `GhostThrough.pdb` are tracked in repo (should be in .gitignore)
