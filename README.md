@@ -176,7 +176,7 @@ Notes:
 
 ## Build
 
-There is no `.csproj` or solution file in the repository. The supported build path is `compile.bat`.
+There is no `.csproj` or solution file in the repository. The supported build paths are `compile.bat` and `run-regression-test.bat`.
 
 ### Quick build
 
@@ -184,12 +184,12 @@ There is no `.csproj` or solution file in the repository. The supported build pa
 compile.bat
 ```
 
-If `GhostThrough.exe` is currently running, exit it from the tray before rebuilding, otherwise the compiler cannot overwrite the file.
+The build now writes to `bin\GhostThrough.exe`, which avoids conflicts with older root-level binaries. If that exact `bin` executable is already running, exit it from the tray before rebuilding.
 
 ### Manual build
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:bin\GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll Program.cs JsonFileSerializer.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
 ```
 
 ## Regression Test
@@ -210,7 +210,7 @@ It currently verifies:
 Build and run it with:
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:exe /out:KeyboardHookRegressionTest.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll KeyboardHookRegressionTest.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs && KeyboardHookRegressionTest.exe
+run-regression-test.bat
 ```
 
 Expected result:
@@ -237,13 +237,14 @@ PASS
 
 1. Clone the repository.
 2. Build with `compile.bat`.
-3. Run `GhostThrough.exe`.
+3. Run `bin\GhostThrough.exe`.
 
 ## Known Limitations
 
 - The app is Windows-only and depends on low-level global hooks plus Win32 style manipulation.
 - The repository currently tracks generated files such as `GhostThrough.exe`, `GhostThrough.pdb`, and `ghostthrough_debug.log`.
 - There is still no installer, updater, `.csproj`, or broad automated test suite.
+- The settings layer now uses `DataContractJsonSerializer`, which is more portable inside classic .NET Framework than the old `JavaScriptSerializer`, but the project is still not migrated to a modern SDK-style .NET setup.
 - No `LICENSE` file is currently tracked in the repository root.
 
 Created by [olegiy](https://github.com/olegiy)

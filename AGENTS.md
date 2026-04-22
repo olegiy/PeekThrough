@@ -16,7 +16,8 @@ GhostThrough is a C# WinForms tray utility for Windows that makes the window und
 - **ProfileManager.cs** — Manages opacity profiles and current active profile
 - **OpacityProfilePresets.cs** — Default opacity preset list and legacy-profile normalization
 - **HotkeyManager.cs** — Hardcoded `Ctrl+Shift+Up/Down` profile cycling hotkeys
-- **SettingsManager.cs** — Loads/saves v2 JSON settings and migrates legacy line-based settings
+- **SettingsManager.cs** — Loads/saves v2 JSON settings via `DataContractJsonSerializer` and migrates legacy line-based settings
+- **JsonFileSerializer.cs** — Shared JSON serialization helper for settings and regression tests
 - **ActivationKeyCatalog.cs** — Allowed activation-key list and display names used by the tray menu
 - **ActivationTypeExtensions.cs** — Conversion helpers between persisted setting values and runtime activation enums
 - **IActivationHost.cs** — Shared contract used by keyboard and mouse hooks
@@ -39,12 +40,12 @@ GhostThrough is a C# WinForms tray utility for Windows that makes the window und
 ## Build
 No `.csproj` file is present. Build with `compile.bat` or call the .NET Framework compiler directly:
 ```bash
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:bin\GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll Program.cs JsonFileSerializer.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
 ```
 
 Regression test build/run:
 ```bash
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:exe /out:KeyboardHookRegressionTest.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll KeyboardHookRegressionTest.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs && KeyboardHookRegressionTest.exe
+run-regression-test.bat
 ```
 
 ## Conventions

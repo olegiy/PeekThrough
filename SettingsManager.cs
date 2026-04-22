@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Web.Script.Serialization;
 using GhostThrough.Models;
 
 namespace GhostThrough
@@ -14,12 +12,10 @@ namespace GhostThrough
     internal class SettingsManager
     {
         private readonly string _settingsPath;
-        private readonly JavaScriptSerializer _serializer;
 
         public SettingsManager(string settingsPath)
         {
             _settingsPath = settingsPath;
-            _serializer = new JavaScriptSerializer();
         }
 
         public Settings LoadSettings()
@@ -54,7 +50,7 @@ namespace GhostThrough
                 }
 
                 // Parse v2 JSON format
-                var settings = _serializer.Deserialize<Settings>(content) ?? CreateDefaultSettings();
+                var settings = JsonFileSerializer.Deserialize<Settings>(content) ?? CreateDefaultSettings();
                 bool settingsChanged = NormalizeActivationSettings(settings);
                 settingsChanged = NormalizeProfiles(settings) || settingsChanged;
                 DebugLogger.Log(string.Format("SettingsManager: Loaded v2 settings, active profile: {0}", settings.Profiles.ActiveId));
@@ -80,8 +76,8 @@ namespace GhostThrough
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
 
-                string json = _serializer.Serialize(settings);
-                File.WriteAllText(_settingsPath, json);
+                string json = JsonFileSerializer.Serialize(settings);
+                WriteFileAtomically(_settingsPath, json);
                 DebugLogger.Log("SettingsManager: Settings saved");
             }
             catch (Exception ex)
@@ -322,6 +318,29 @@ namespace GhostThrough
             }
 
             return changed;
+        }
+
+        private static void WriteFileAtomically(string targetPath, string content)
+        {
+            string tempPath = targetPath + ".tmp";
+            File.WriteAllText(tempPath, content);
+
+            try
+            {
+                if (File.Exists(targetPath))
+                {
+                    File.Replace(tempPath, targetPath, null);
+                }
+                else
+                {
+                    File.Move(tempPath, targetPath);
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
         }
     }
 }

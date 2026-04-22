@@ -176,7 +176,7 @@ GhostThrough поддерживает два режима активации:
 
 ## Сборка
 
-В репозитории нет `.csproj` или `.sln`. Поддерживаемый путь сборки — `compile.bat`.
+В репозитории нет `.csproj` или `.sln`. Поддерживаемые пути сборки — `compile.bat` и `run-regression-test.bat`.
 
 ### Быстрая сборка
 
@@ -184,12 +184,12 @@ GhostThrough поддерживает два режима активации:
 compile.bat
 ```
 
-Если `GhostThrough.exe` уже запущен, перед пересборкой закройте его через трей, иначе компилятор не сможет перезаписать файл.
+Сборка теперь пишет результат в `bin\GhostThrough.exe`, что уменьшает конфликты со старыми бинарниками в корне. Если запущен именно этот `bin`-exe, перед пересборкой закройте его через трей.
 
 ### Ручная сборка
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
+C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /out:bin\GhostThrough.exe /win32icon:resources\icons\icon.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Runtime.Serialization.dll Program.cs JsonFileSerializer.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs
 ```
 
 ## Регрессионный тест
@@ -210,7 +210,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe /
 Сборка и запуск:
 
 ```bat
-C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:exe /out:KeyboardHookRegressionTest.exe /reference:System.Windows.Forms.dll /reference:System.Drawing.dll KeyboardHookRegressionTest.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs && KeyboardHookRegressionTest.exe
+run-regression-test.bat
 ```
 
 Ожидаемый результат:
@@ -237,13 +237,14 @@ PASS
 
 1. Клонируйте репозиторий.
 2. Соберите проект через `compile.bat`.
-3. Запустите `GhostThrough.exe`.
+3. Запустите `bin\GhostThrough.exe`.
 
 ## Известные ограничения
 
 - Приложение работает только на Windows и зависит от low-level global hooks и манипуляции Win32-стилями окон.
 - В репозитории сейчас отслеживаются сгенерированные файлы вроде `GhostThrough.exe`, `GhostThrough.pdb` и `ghostthrough_debug.log`.
 - По-прежнему нет installer, updater, `.csproj` и полноценного автоматизированного набора тестов.
+- Слой настроек теперь использует `DataContractJsonSerializer`, что надёжнее внутри классического .NET Framework, чем прежний `JavaScriptSerializer`, но проект всё ещё не мигрирован на современный SDK-style .NET.
 - В корне репозитория пока нет файла `LICENSE`.
 
 Автор: [olegiy](https://github.com/olegiy)

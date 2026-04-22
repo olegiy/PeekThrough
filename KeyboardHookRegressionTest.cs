@@ -45,6 +45,7 @@ namespace GhostThrough.Tests
                 ShouldOnlyDeactivateGhostModeOncePerRequest();
                 ShouldClearActivationStateEvenWithoutTrackedGhostWindow();
                 ShouldNormalizeInvalidActivationSettingsOnLoad();
+                ShouldRoundTripSettingsThroughAtomicSave();
                 ShouldSanitizeInvalidProfilesOnLoad();
                 ShouldNormalizeProfileActiveIdOnLoad();
                 ShouldNormalizeInvalidActivationSettingsDuringV1Migration();
@@ -158,12 +159,11 @@ namespace GhostThrough.Tests
 
             try
             {
-                var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
                 var settings = new Settings();
                 settings.Activation.Type = "invalid-type";
                 settings.Activation.KeyCode = NativeMethods.VK_LCONTROL;
                 settings.Activation.MouseButton = NativeMethods.VK_LBUTTON;
-                File.WriteAllText(settingsPath, serializer.Serialize(settings));
+                File.WriteAllText(settingsPath, JsonFileSerializer.Serialize(settings));
 
                 var manager = new SettingsManager(settingsPath);
                 Settings loaded = manager.LoadSettings();
@@ -214,6 +214,77 @@ namespace GhostThrough.Tests
             }
         }
 
+        private static void ShouldRoundTripSettingsThroughAtomicSave()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughRoundTripSettingsTest_" + Guid.NewGuid().ToString("N"));
+            string settingsPath = Path.Combine(tempDir, "settings.json");
+
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                var original = new Settings();
+                original.Activation.Type = "mouse";
+                original.Activation.KeyCode = NativeMethods.VK_SPACE;
+                original.Activation.MouseButton = NativeMethods.VK_XBUTTON1;
+                original.Profiles.List = new List<ProfileData>
+                {
+                    new ProfileData { Id = "custom_1", Name = "15%", Opacity = 38 },
+                    new ProfileData { Id = "custom_2", Name = "75%", Opacity = 191 }
+                };
+                original.Profiles.ActiveId = "custom_2";
+                original.Hotkeys.NextProfile.Key = "PageUp";
+                original.Hotkeys.PrevProfile.Key = "PageDown";
+
+                var manager = new SettingsManager(settingsPath);
+                manager.SaveSettings(original);
+
+                if (!File.Exists(settingsPath))
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not create settings.json during save.");
+                }
+
+                if (File.Exists(settingsPath + ".tmp"))
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager left a temporary .tmp file after atomic save.");
+                }
+
+                Settings loaded = manager.LoadSettings();
+
+                if (loaded.Activation.Type != "mouse" ||
+                    loaded.Activation.KeyCode != NativeMethods.VK_SPACE ||
+                    loaded.Activation.MouseButton != NativeMethods.VK_XBUTTON1)
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not preserve activation settings during round-trip save/load.");
+                }
+
+                if (loaded.Profiles.ActiveId != "custom_2" ||
+                    loaded.Profiles.List == null ||
+                    loaded.Profiles.List.Count != 2 ||
+                    loaded.Profiles.List[1].Opacity != 191)
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not preserve profile settings during round-trip save/load.");
+                }
+
+                if (loaded.Hotkeys.NextProfile.Key != "PageUp" ||
+                    loaded.Hotkeys.PrevProfile.Key != "PageDown")
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not preserve hotkey settings during round-trip save/load.");
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
         private static void ShouldSanitizeInvalidProfilesOnLoad()
         {
             string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughProfileSettingsTest_" + Guid.NewGuid().ToString("N"));
@@ -223,7 +294,6 @@ namespace GhostThrough.Tests
 
             try
             {
-                var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
                 var settings = new Settings();
                 settings.Profiles.List = new List<ProfileData>
                 {
@@ -233,7 +303,7 @@ namespace GhostThrough.Tests
                     new ProfileData { Id = "dup", Name = "B", Opacity = 51 }
                 };
                 settings.Profiles.ActiveId = "missing";
-                File.WriteAllText(settingsPath, serializer.Serialize(settings));
+                File.WriteAllText(settingsPath, JsonFileSerializer.Serialize(settings));
 
                 var manager = new SettingsManager(settingsPath);
                 Settings loaded = manager.LoadSettings();
@@ -281,7 +351,6 @@ namespace GhostThrough.Tests
 
             try
             {
-                var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
                 var settings = new Settings();
                 settings.Profiles.List = new List<ProfileData>
                 {
@@ -289,7 +358,7 @@ namespace GhostThrough.Tests
                     new ProfileData { Id = "p20", Name = "20%", Opacity = 51 }
                 };
                 settings.Profiles.ActiveId = "  P20  ";
-                File.WriteAllText(settingsPath, serializer.Serialize(settings));
+                File.WriteAllText(settingsPath, JsonFileSerializer.Serialize(settings));
 
                 var manager = new SettingsManager(settingsPath);
                 Settings loaded = manager.LoadSettings();
@@ -350,6 +419,18 @@ namespace GhostThrough.Tests
                 if (!File.Exists(settingsPath + ".bak"))
                 {
                     throw new InvalidOperationException("FAIL: V1 migration did not create a backup .bak file.");
+                }
+
+                string backupContent = File.ReadAllText(settingsPath + ".bak");
+                if (!backupContent.Contains("ActivationKeyCode:162"))
+                {
+                    throw new InvalidOperationException("FAIL: V1 migration backup does not preserve the original legacy settings content.");
+                }
+
+                string migratedContent = File.ReadAllText(settingsPath);
+                if (migratedContent.Contains("ActivationKeyCode:"))
+                {
+                    throw new InvalidOperationException("FAIL: V1 migration left legacy settings format in settings.json instead of writing JSON.");
                 }
             }
             finally

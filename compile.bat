@@ -8,19 +8,22 @@ if not exist "%CSC%" (
     exit /b 1
 )
 
-set "OUTPUT=GhostThrough.exe"
+if not exist "bin" mkdir "bin"
+
+set "OUTPUT=bin\GhostThrough.exe"
 if exist "%OUTPUT%" (
     echo Removing old executable...
     del "%OUTPUT%"
 )
 
-set "SOURCES=Program.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs"
+set "SOURCES=Program.cs JsonFileSerializer.cs NativeMethods.cs KeyboardHook.cs MouseHook.cs GhostController.cs ActivationStateManager.cs WindowTransparencyManager.cs TooltipService.cs SettingsManager.cs ProfileManager.cs OpacityProfilePresets.cs HotkeyManager.cs DebugLogger.cs IActivationHost.cs ActivationKeyCatalog.cs ActivationTypeExtensions.cs AppContext.cs TrayMenuController.cs Models\Settings.cs Models\Profile.cs Models\GhostWindowState.cs"
 
 echo Compiling...
 "%CSC%" /nologo /target:winexe /out:"%OUTPUT%" ^
     /win32icon:resources\icons\icon.ico ^
     /reference:System.Windows.Forms.dll ^
     /reference:System.Drawing.dll ^
+    /reference:System.Runtime.Serialization.dll ^
     %SOURCES% 2> compile_errors.txt
 
 if errorlevel 1 (
