@@ -162,6 +162,14 @@ namespace GhostThrough
             _activationState.BlockActivation();
         }
 
+        public void OnKeyboardHandoffDuringActivationHold()
+        {
+            if (CurrentActivationType != ActivationInputType.Keyboard)
+                return;
+
+            _activationState.CancelKeyboardActivationHoldForHandoff();
+        }
+
         public void RequestDeactivate()
         {
             DeactivateGhostMode();

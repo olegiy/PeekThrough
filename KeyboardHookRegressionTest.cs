@@ -50,8 +50,13 @@ namespace GhostThrough.Tests
                 ShouldNormalizeProfileActiveIdOnLoad();
                 ShouldNormalizeInvalidActivationSettingsDuringV1Migration();
                 ShouldNotNotifyWhenSettingSameActiveProfile();
-
+ 
                 ShouldTreatKeyAsPressedImmediatelyAfterActivationKeyDown();
+                ShouldTriggerKeyboardHandoffOnFirstOtherKeyDuringHold();
+                ShouldSkipActivationKeyUpAfterKeyboardHandoff();
+                ShouldReinjectWinKeyDownOnKeyboardHandoffAfterSuppression();
+                ShouldDeactivateGhostModeImmediatelyOnKeyboardHandoff();
+                ShouldCancelPendingKeyboardHoldWithoutDeactivationWhenGhostModeInactive();
                 ShouldRejectModifierActivationKeysToAvoidShortcutBlocking();
                 ShouldFlushQueuedLogEntries();
                 Console.WriteLine("PASS");
@@ -91,6 +96,204 @@ namespace GhostThrough.Tests
             {
                 controller.Dispose();
                 hook.Dispose();
+            }
+        }
+
+        private static void ShouldTriggerKeyboardHandoffOnFirstOtherKeyDuringHold()
+        {
+            var host = new TestActivationHost();
+            var syncContext = new QueuedSynchronizationContext();
+            var hook = CreateKeyboardHookForTest(host, syncContext);
+
+            try
+            {
+                InvokePrivateMethod(hook, "ProcessActivationKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, NativeMethods.VK_LWIN);
+                InvokePrivateMethod(hook, "ProcessOtherKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, 0x41);
+                InvokePrivateMethod(hook, "ProcessOtherKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, 0x42);
+
+                bool keyboardHandoffTriggered = (bool)GetPrivateField(hook, "_keyboardHandoffTriggered");
+                if (!keyboardHandoffTriggered)
+                {
+                    throw new InvalidOperationException("FAIL: KeyboardHook did not mark handoff as triggered after another key was pressed during the hold.");
+                }
+
+                syncContext.Flush();
+
+                if (host.KeyboardHandoffCount != 1)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: Keyboard handoff callback fired {0} times instead of once for a single hold.", host.KeyboardHandoffCount));
+                }
+            }
+            finally
+            {
+                hook.Dispose();
+            }
+        }
+
+        private static void ShouldSkipActivationKeyUpAfterKeyboardHandoff()
+        {
+            var host = new TestActivationHost();
+            var syncContext = new QueuedSynchronizationContext();
+            var hook = CreateKeyboardHookForTest(host, syncContext);
+
+            try
+            {
+                InvokePrivateMethod(hook, "ProcessActivationKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, NativeMethods.VK_LWIN);
+                InvokePrivateMethod(hook, "ProcessOtherKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, 0x41);
+                syncContext.Flush();
+
+                InvokePrivateMethod(hook, "ProcessActivationKey", 0, (IntPtr)NativeMethods.WM_KEYUP, IntPtr.Zero, NativeMethods.VK_LWIN);
+                syncContext.Flush();
+
+                if (host.ActivationKeyUpCount != 0)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: Activation key up handler fired {0} times after keyboard handoff.", host.ActivationKeyUpCount));
+                }
+            }
+            finally
+            {
+                hook.Dispose();
+            }
+        }
+
+        private static void ShouldReinjectWinKeyDownOnKeyboardHandoffAfterSuppression()
+        {
+            var host = new TestActivationHost { ShouldSuppressActivationKey = true };
+            var syncContext = new QueuedSynchronizationContext();
+            var hook = CreateKeyboardHookForTest(host, syncContext);
+            int sendInputCalls = 0;
+            int inputCount = 0;
+            ushort[] replayedVirtualKeys = new ushort[2];
+
+            try
+            {
+                SetPrivateField(
+                    hook,
+                    "_sendInput",
+                    new Func<uint, NativeMethods.INPUT[], int, uint>((count, inputs, size) =>
+                    {
+                        sendInputCalls++;
+                        inputCount = (int)count;
+                        if (inputs != null)
+                        {
+                            for (int i = 0; i < System.Math.Min((int)count, 2); i++)
+                                replayedVirtualKeys[i] = inputs[i].U.ki.wVk;
+                        }
+                        return count;
+                    }));
+
+                InvokePrivateMethod(hook, "ProcessActivationKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, NativeMethods.VK_LWIN);
+                InvokePrivateMethod(hook, "ProcessOtherKey", 0, (IntPtr)NativeMethods.WM_KEYDOWN, IntPtr.Zero, 0x48);
+                syncContext.Flush();
+
+                if (sendInputCalls != 1)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: Keyboard handoff called SendInput {0} times instead of once.", sendInputCalls));
+                }
+
+                if (inputCount != 2)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: Keyboard handoff sent {0} inputs instead of Win+H (2).", inputCount));
+                }
+
+                if (replayedVirtualKeys[0] != NativeMethods.VK_LWIN)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: First injected key was vkCode={0} instead of Left Win.", replayedVirtualKeys[0]));
+                }
+
+                if (replayedVirtualKeys[1] != 0x48)
+                {
+                    throw new InvalidOperationException(
+                        string.Format("FAIL: Second injected key was vkCode={0} instead of H (0x48).", replayedVirtualKeys[1]));
+                }
+            }
+            finally
+            {
+                hook.Dispose();
+            }
+        }
+
+        private static void ShouldDeactivateGhostModeImmediatelyOnKeyboardHandoff()
+        {
+            var controller = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
+
+            try
+            {
+                object activationState = GetPrivateField(controller, "_activationState");
+                SetPrivateField(activationState, "_isActivationKeyDown", true);
+                SetPrivateField(activationState, "_ghostModeActive", true);
+                SetPrivateField(activationState, "_timerFired", true);
+                SetPrivateField(activationState, "_suppressActivationKey", true);
+                SetPrivateField(controller, "_currentTargetHwnd", new IntPtr(123));
+
+                controller.OnKeyboardHandoffDuringActivationHold();
+
+                bool ghostModeActive = (bool)GetPrivateField(activationState, "_ghostModeActive");
+                bool isActivationKeyDown = (bool)GetPrivateField(activationState, "_isActivationKeyDown");
+                bool suppressActivationKey = (bool)GetPrivateField(activationState, "_suppressActivationKey");
+                IntPtr currentTarget = (IntPtr)GetPrivateField(controller, "_currentTargetHwnd");
+
+                if (ghostModeActive)
+                {
+                    throw new InvalidOperationException(
+                        string.Format(
+                            "FAIL: Keyboard handoff did not deactivate Ghost Mode immediately. ghostModeActive={0}, isActivationKeyDown={1}, suppressActivationKey={2}, currentTarget={3}",
+                            ghostModeActive,
+                            isActivationKeyDown,
+                            suppressActivationKey,
+                            currentTarget));
+                }
+
+                if (isActivationKeyDown)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff left activation key state pressed.");
+
+                if (suppressActivationKey)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff left activation-key suppression enabled.");
+
+                if (currentTarget != IntPtr.Zero)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff did not clear the tracked ghost window.");
+            }
+            finally
+            {
+                controller.Dispose();
+            }
+        }
+
+        private static void ShouldCancelPendingKeyboardHoldWithoutDeactivationWhenGhostModeInactive()
+        {
+            var controller = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
+
+            try
+            {
+                object activationState = GetPrivateField(controller, "_activationState");
+                SetPrivateField(activationState, "_isActivationKeyDown", true);
+                SetPrivateField(activationState, "_ghostModeActive", false);
+                SetPrivateField(activationState, "_timerFired", false);
+                SetPrivateField(activationState, "_suppressActivationKey", true);
+
+                controller.OnKeyboardHandoffDuringActivationHold();
+
+                bool ghostModeActive = (bool)GetPrivateField(activationState, "_ghostModeActive");
+                bool isActivationKeyDown = (bool)GetPrivateField(activationState, "_isActivationKeyDown");
+                bool suppressActivationKey = (bool)GetPrivateField(activationState, "_suppressActivationKey");
+
+                if (ghostModeActive)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff activated or kept Ghost Mode while it should stay inactive.");
+
+                if (isActivationKeyDown)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff did not clear pending activation key state.");
+
+                if (suppressActivationKey)
+                    throw new InvalidOperationException("FAIL: Keyboard handoff left suppression enabled for an inactive hold.");
+            }
+            finally
+            {
+                controller.Dispose();
             }
         }
 
@@ -540,6 +743,48 @@ namespace GhostThrough.Tests
             if (!content.Contains("test-log-entry"))
             {
                 throw new InvalidOperationException("FAIL: DebugLogger.Flush did not persist queued entries.");
+            }
+        }
+
+        private sealed class TestActivationHost : IActivationHost
+        {
+            public int ActivationKeyCode { get; set; } = NativeMethods.VK_LWIN;
+            public bool ShouldSuppressActivationKey { get; set; }
+            public bool IsGhostModeActive { get; set; }
+            public int KeyboardHandoffCount { get; private set; }
+            public int ActivationKeyDownCount { get; private set; }
+            public int ActivationKeyUpCount { get; private set; }
+            public int BlockBeforeActivationCount { get; private set; }
+            public int DeactivateRequestCount { get; private set; }
+
+            public void OnActivationInputDown()
+            {
+                ActivationKeyDownCount++;
+            }
+
+            public void OnActivationInputUp()
+            {
+                ActivationKeyUpCount++;
+            }
+
+            public void OnOtherInputBeforeActivation()
+            {
+                BlockBeforeActivationCount++;
+            }
+
+            public void OnKeyboardHandoffDuringActivationHold()
+            {
+                KeyboardHandoffCount++;
+            }
+
+            public bool ProcessHotkey(int vkCode, bool isDown, bool ctrl, bool shift, bool alt)
+            {
+                return false;
+            }
+
+            public void RequestDeactivate()
+            {
+                DeactivateRequestCount++;
             }
         }
 

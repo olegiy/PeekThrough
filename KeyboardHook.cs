@@ -14,6 +14,7 @@ namespace GhostThrough
         private SynchronizationContext _syncContext;
         private bool _disposed = false;
         private IActivationHost _activationHost;
+        private Func<uint, NativeMethods.INPUT[], int, uint> _sendInput = NativeMethods.SendInput;
 
         // Modifier key tracking
         private bool _ctrlPressed;
@@ -24,6 +25,9 @@ namespace GhostThrough
         private HashSet<int> _pressedKeys = new HashSet<int>();
         private bool _keyPressedAfterActivation = false;
         private bool _isActivationKeyDown = false;
+        private bool _keyboardHandoffTriggered = false;
+        private bool _suppressedActivationKeyDown = false;
+        private int _handoffReplayedVkCode = 0;
 
         public event Action OnActivationKeyDown;
         public event Action OnActivationKeyUp;
@@ -150,6 +154,9 @@ namespace GhostThrough
             {
                 _isActivationKeyDown = true;
                 _keyPressedAfterActivation = false;
+                _keyboardHandoffTriggered = false;
+                _suppressedActivationKeyDown = false;
+                _handoffReplayedVkCode = 0;
 
                 if (_pressedKeys.Count > 0)
                 {
@@ -165,13 +172,23 @@ namespace GhostThrough
             else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
             {
                 _isActivationKeyDown = false;
+
+                if (_keyboardHandoffTriggered)
+                {
+                    DebugLogger.Log("HookCallback: Activation key released after keyboard handoff - passing through");
+                    _keyPressedAfterActivation = false;
+                    _keyboardHandoffTriggered = false;
+                    _handoffReplayedVkCode = 0;
+                    return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+                }
+
                 bool keyPressedAfterActivation = _keyPressedAfterActivation;
 
                 if (keyPressedAfterActivation)
                 {
                     DebugLogger.Log("HookCallback: Key pressed after activation - blocking");
-                    var handlerBlocked = OnOtherKeyPressedBeforeActivation;
-                    PostHandler(handlerBlocked, "OtherKey handler error on release");
+                    if (_activationHost != null)
+                        PostHandler(_activationHost.OnKeyboardHandoffDuringActivationHold, "Keyboard handoff handler error on release");
                 }
                 else
                 {
@@ -188,6 +205,11 @@ namespace GhostThrough
             if (shouldSuppress)
             {
                 DebugLogger.Log("HookCallback: SUPPRESSING activation key event!");
+
+                if (wParam == (IntPtr)NativeMethods.WM_KEYDOWN)
+                    _suppressedActivationKeyDown = true;
+                else if (wParam == (IntPtr)NativeMethods.WM_KEYUP)
+                    _suppressedActivationKeyDown = false;
 
                 PostHandler(handler, "Hook handler error");
 
@@ -211,6 +233,21 @@ namespace GhostThrough
                 {
                     _keyPressedAfterActivation = true;
                     DebugLogger.Log("HookCallback: Key pressed AFTER activation key");
+
+                    if (!_keyboardHandoffTriggered && _activationHost != null)
+                    {
+                        _keyboardHandoffTriggered = true;
+
+                        PostHandler(_activationHost.OnKeyboardHandoffDuringActivationHold, "Keyboard handoff handler error");
+
+                        if (_suppressedActivationKeyDown)
+                        {
+                            ReplaySuppressedActivationKeyWithOtherKey(vkCode);
+                            _suppressedActivationKeyDown = false;
+                            _handoffReplayedVkCode = vkCode;
+                            return (IntPtr)1;
+                        }
+                    }
                 }
 
                 // Escape during Ghost Mode - quick exit
@@ -224,9 +261,31 @@ namespace GhostThrough
             {
                 _pressedKeys.Remove(vkCode);
                 DebugLogger.Log(string.Format("HookCallback: Other key UP, vkCode={0}, remaining: {1}", vkCode, _pressedKeys.Count));
+
+                if (_handoffReplayedVkCode != 0 && vkCode == _handoffReplayedVkCode)
+                    _handoffReplayedVkCode = 0;
             }
 
             return NativeMethods.CallNextHookEx(_hookID, nCode, wParam, lParam);
+        }
+
+        private void ReplaySuppressedActivationKeyWithOtherKey(int otherVkCode)
+        {
+            if (_activationHost == null)
+                return;
+
+            NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
+            inputs[0].type = NativeMethods.INPUT_KEYBOARD;
+            inputs[0].U.ki.wVk = (ushort)_activationHost.ActivationKeyCode;
+            inputs[0].U.ki.dwFlags = 0;
+            inputs[0].U.ki.time = 0;
+            inputs[0].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
+            inputs[1].type = NativeMethods.INPUT_KEYBOARD;
+            inputs[1].U.ki.wVk = (ushort)otherVkCode;
+            inputs[1].U.ki.dwFlags = 0;
+            inputs[1].U.ki.time = 0;
+            inputs[1].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
+            _sendInput(2, inputs, NativeMethods.INPUT.Size);
         }
 
         private void PostHandler(Action handler, string label)

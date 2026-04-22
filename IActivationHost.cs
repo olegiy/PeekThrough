@@ -9,6 +9,7 @@ namespace GhostThrough
         void OnActivationInputDown();
         void OnActivationInputUp();
         void OnOtherInputBeforeActivation();
+        void OnKeyboardHandoffDuringActivationHold();
         bool ProcessHotkey(int vkCode, bool isDown, bool ctrl, bool shift, bool alt);
         void RequestDeactivate();
     }

@@ -255,6 +255,35 @@ namespace GhostThrough
             DeactivateGhostMode();
         }
 
+        public void CancelKeyboardActivationHoldForHandoff()
+        {
+            Action deactivateHandler = null;
+
+            lock (_lockObject)
+            {
+                if (_activationType != ActivationInputType.Keyboard)
+                    return;
+
+                _activationTimer.Stop();
+                _suppressTimer.Stop();
+
+                bool shouldDeactivate = _ghostModeActive;
+
+                _isActivationKeyDown = false;
+                _timerFired = false;
+                _suppressActivationKey = false;
+
+                if (shouldDeactivate)
+                {
+                    _ghostModeActive = false;
+                    deactivateHandler = OnGhostModeShouldDeactivate;
+                }
+            }
+
+            if (deactivateHandler != null)
+                deactivateHandler();
+        }
+
         private void OnActivationTimerTick(object sender, EventArgs e)
         {
             DebugLogger.Log("=== ActivationStateManager.OnActivationTimerTick ===");
