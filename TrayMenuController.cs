@@ -20,10 +20,14 @@ namespace GhostThrough
             _trayIcon.Text = "GhostThrough Ghost Mode";
 
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "icons", "icon.ico");
+            System.Drawing.Icon trayIcon = null;
             if (File.Exists(iconPath))
-                _trayIcon.Icon = new System.Drawing.Icon(iconPath);
-            else
-                _trayIcon.Icon = System.Drawing.SystemIcons.Application;
+                trayIcon = new System.Drawing.Icon(iconPath);
+
+            if (trayIcon == null)
+                trayIcon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+
+            _trayIcon.Icon = trayIcon ?? System.Drawing.SystemIcons.Application;
 
             _activationKeyMenuItem = BuildActivationKeyMenuItem();
             _activationMethodMenuItem = BuildActivationMethodMenuItem();
