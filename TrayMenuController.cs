@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace GhostThrough
@@ -19,7 +20,7 @@ namespace GhostThrough
         {
             _appContext = appContext;
             _trayIcon = new NotifyIcon();
-            _trayIcon.Text = "GhostThrough Ghost Mode";
+            _trayIcon.Text = BuildTrayTooltip(Assembly.GetExecutingAssembly());
 
             string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "resources", "icons", "icon.ico");
             System.Drawing.Icon trayIcon = null;
@@ -39,6 +40,59 @@ namespace GhostThrough
 
             _trayIcon.ContextMenuStrip = _menu;
             _trayIcon.Visible = true;
+        }
+
+        internal static string BuildTrayTooltip(Assembly assembly)
+        {
+            const int notifyIconTextLimit = 63;
+            const string fallbackName = "GhostThrough";
+
+            try
+            {
+                AssemblyName assemblyName = assembly.GetName();
+                string productName = string.IsNullOrWhiteSpace(assemblyName.Name)
+                    ? fallbackName
+                    : assemblyName.Name;
+                string version = FormatProductVersion(assemblyName.Version);
+                string timestamp = NormalizeInformationalVersion(
+                    assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+
+                string tooltip;
+                if (!string.IsNullOrWhiteSpace(version) && !string.IsNullOrWhiteSpace(timestamp))
+                    tooltip = string.Format("{0} {1} ({2})", productName, version, timestamp);
+                else if (!string.IsNullOrWhiteSpace(version))
+                    tooltip = string.Format("{0} {1}", productName, version);
+                else
+                    tooltip = productName;
+
+                return tooltip.Length <= notifyIconTextLimit
+                    ? tooltip
+                    : tooltip.Substring(0, notifyIconTextLimit);
+            }
+            catch
+            {
+                return fallbackName;
+            }
+        }
+
+        private static string FormatProductVersion(Version version)
+        {
+            if (version == null)
+                return null;
+
+            return string.Format("{0}.{1}.{2}", version.Major, version.Minor, version.Build < 0 ? 0 : version.Build);
+        }
+
+        private static string NormalizeInformationalVersion(string informationalVersion)
+        {
+            if (string.IsNullOrWhiteSpace(informationalVersion))
+                return null;
+
+            int metadataIndex = informationalVersion.IndexOf('+');
+            if (metadataIndex >= 0)
+                informationalVersion = informationalVersion.Substring(0, metadataIndex);
+
+            return informationalVersion.Trim();
         }
 
         private ContextMenuStrip BuildMenu()

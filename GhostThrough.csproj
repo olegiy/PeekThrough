@@ -13,6 +13,7 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>$([System.DateTime]::Now.ToString("yyyy.M.d.HHmm"))</FileVersion>
     <InformationalVersion>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm"))</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
