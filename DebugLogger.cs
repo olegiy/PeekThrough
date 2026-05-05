@@ -8,12 +8,19 @@ namespace GhostThrough
 {
     internal static class DebugLogger
     {
+        public const string LEVEL_DEBUG = "debug";
+        public const string LEVEL_INFO = "info";
+        private const long MAX_LOG_SIZE_BYTES = 1024 * 1024;
+        private const int LOG_OVERLAP_BYTES = 50 * 1024;
+
         private static readonly string LogPath;
         private static readonly object FileLock = new object();
         private static readonly ConcurrentQueue<string> Queue = new ConcurrentQueue<string>();
         private static readonly ManualResetEventSlim Signal = new ManualResetEventSlim(false);
         private static readonly Thread WriterThread;
+        private static readonly object LevelLock = new object();
         private static int _isWriting;
+        private static string _logLevel;
 
         static DebugLogger()
         {
@@ -21,6 +28,32 @@ namespace GhostThrough
             WriterThread = new Thread(WriteLoop);
             WriterThread.IsBackground = true;
             WriterThread.Start();
+        }
+
+        public static string CurrentLevel
+        {
+            get
+            {
+                lock (LevelLock)
+                    return NormalizeLogLevel(_logLevel);
+            }
+        }
+
+        public static void SetLevel(string level)
+        {
+            string normalizedLevel = NormalizeLogLevel(level);
+            lock (LevelLock)
+                _logLevel = normalizedLevel;
+
+            LogInfo(string.Format("DebugLogger: Log level set to {0}", normalizedLevel));
+        }
+
+        public static string NormalizeLogLevel(string level)
+        {
+            if (string.Equals(level, LEVEL_INFO, StringComparison.OrdinalIgnoreCase))
+                return LEVEL_INFO;
+
+            return LEVEL_DEBUG;
         }
 
         public static void Log(string message)
@@ -68,11 +101,18 @@ namespace GhostThrough
 
         private static bool ShouldLogDebugMessages()
         {
-            string logLevel = Environment.GetEnvironmentVariable("GHOSTTHROUGH_LOG_LEVEL");
-            if (string.IsNullOrEmpty(logLevel))
-                logLevel = Environment.GetEnvironmentVariable("PEEKTHROUGH_LOG_LEVEL");
+            string logLevel;
+            lock (LevelLock)
+                logLevel = _logLevel;
 
-            return !string.Equals(logLevel, "INFO", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(logLevel))
+            {
+                logLevel = Environment.GetEnvironmentVariable("GHOSTTHROUGH_LOG_LEVEL");
+                if (string.IsNullOrEmpty(logLevel))
+                    logLevel = Environment.GetEnvironmentVariable("PEEKTHROUGH_LOG_LEVEL");
+            }
+
+            return !string.Equals(logLevel, LEVEL_INFO, StringComparison.OrdinalIgnoreCase);
         }
 
         private static void EnqueueLogLine(string message)
@@ -105,6 +145,7 @@ namespace GhostThrough
                 {
                     lock (FileLock)
                     {
+                        TrimLogIfNeeded();
                         File.AppendAllText(LogPath, logLine, Encoding.UTF8);
                     }
                 }
@@ -116,6 +157,39 @@ namespace GhostThrough
                 {
                     Interlocked.Exchange(ref _isWriting, 0);
                 }
+            }
+        }
+
+        private static void TrimLogIfNeeded()
+        {
+            try
+            {
+                if (!File.Exists(LogPath))
+                    return;
+
+                var fileInfo = new FileInfo(LogPath);
+                if (fileInfo.Length <= MAX_LOG_SIZE_BYTES)
+                    return;
+
+                byte[] content = File.ReadAllBytes(LogPath);
+                int overlapLength = Math.Min(LOG_OVERLAP_BYTES, content.Length);
+                string overlap = Encoding.UTF8.GetString(content, content.Length - overlapLength, overlapLength);
+                int firstLineBreak = overlap.IndexOf('\n');
+                if (firstLineBreak >= 0 && firstLineBreak + 1 < overlap.Length)
+                    overlap = overlap.Substring(firstLineBreak + 1);
+
+                string marker = string.Format(
+                    "[{0}] Log trimmed after exceeding {1} bytes; kept last ~{2} bytes.{3}",
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+                    MAX_LOG_SIZE_BYTES,
+                    LOG_OVERLAP_BYTES,
+                    Environment.NewLine);
+
+                File.WriteAllText(LogPath, marker + overlap, Encoding.UTF8);
+            }
+            catch
+            {
+                // Logging must never break hook processing.
             }
         }
     }

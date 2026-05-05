@@ -38,6 +38,7 @@ namespace GhostThrough
                     var v2 = ConvertToV2(v1);
                     NormalizeActivationSettings(v2);
                     NormalizeProfiles(v2);
+                    NormalizeLoggingSettings(v2);
 
                     // Backup old settings
                     string backupPath = _settingsPath + ".bak";
@@ -53,6 +54,7 @@ namespace GhostThrough
                 var settings = JsonFileSerializer.Deserialize<Settings>(content) ?? CreateDefaultSettings();
                 bool settingsChanged = NormalizeActivationSettings(settings);
                 settingsChanged = NormalizeProfiles(settings) || settingsChanged;
+                settingsChanged = NormalizeLoggingSettings(settings) || settingsChanged;
                 DebugLogger.Log(string.Format("SettingsManager: Loaded v2 settings, active profile: {0}", settings.Profiles.ActiveId));
                 if (settingsChanged)
                 {
@@ -263,6 +265,27 @@ namespace GhostThrough
 
             return changed;
 
+        }
+
+        private bool NormalizeLoggingSettings(Settings settings)
+        {
+            if (settings == null)
+                return false;
+
+            if (settings.Logging == null)
+            {
+                settings.Logging = new LoggingSettings();
+                return true;
+            }
+
+            string normalizedLevel = DebugLogger.NormalizeLogLevel(settings.Logging.Level);
+            if (!string.Equals(settings.Logging.Level, normalizedLevel, StringComparison.OrdinalIgnoreCase))
+            {
+                settings.Logging.Level = normalizedLevel;
+                return true;
+            }
+
+            return false;
         }
 
         private static int NormalizeMouseButton(int mouseButton)

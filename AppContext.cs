@@ -33,6 +33,7 @@ namespace GhostThrough
 
             var controller = new GhostController(activationType, profileManager, settings.Activation.ActivationDelayMs, activationMode);
             controller.ActivationKeyCode = GhostController.NormalizeActivationKeyCode(settings.Activation.KeyCode);
+            DebugLogger.SetLevel(settings.Logging.Level);
 
             var appContext = new AppContext
             {
@@ -70,6 +71,15 @@ namespace GhostThrough
         {
             if (_shutdown)
                 return;
+
+            Save();
+        }
+
+        public void ReconfigureLogLevel(string logLevel)
+        {
+            string normalizedLevel = DebugLogger.NormalizeLogLevel(logLevel);
+            Settings.Logging.Level = normalizedLevel;
+            DebugLogger.SetLevel(normalizedLevel);
 
             Save();
         }

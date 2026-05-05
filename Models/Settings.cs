@@ -17,6 +17,8 @@ namespace GhostThrough.Models
         public ProfileSettings Profiles { get; set; }
         [DataMember(Order = 4)]
         public HotkeySettings Hotkeys { get; set; }
+        [DataMember(Order = 5)]
+        public LoggingSettings Logging { get; set; }
 
         public Settings()
         {
@@ -24,6 +26,7 @@ namespace GhostThrough.Models
             Activation = new ActivationSettings();
             Profiles = new ProfileSettings();
             Hotkeys = new HotkeySettings();
+            Logging = new LoggingSettings();
         }
     }
 
@@ -113,5 +116,17 @@ namespace GhostThrough.Models
         public bool Alt { get; set; }
         [DataMember(Order = 4)]
         public string Key { get; set; }
+    }
+
+    [DataContract]
+    internal class LoggingSettings
+    {
+        [DataMember(Order = 1)]
+        public string Level { get; set; }
+
+        public LoggingSettings()
+        {
+            Level = DebugLogger.LEVEL_DEBUG;
+        }
     }
 }

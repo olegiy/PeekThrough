@@ -14,6 +14,7 @@ namespace GhostThrough
         private readonly ToolStripMenuItem _activationMethodMenuItem;
         private readonly ToolStripMenuItem _activationDelayMenuItem;
         private readonly ToolStripMenuItem _activationModeMenuItem;
+        private readonly ToolStripMenuItem _loggingLevelMenuItem;
         private bool _disposed;
 
         public TrayMenuController(AppContext appContext)
@@ -36,6 +37,7 @@ namespace GhostThrough
             _activationMethodMenuItem = BuildActivationMethodMenuItem();
             _activationDelayMenuItem = BuildActivationDelayMenuItem();
             _activationModeMenuItem = BuildActivationModeMenuItem();
+            _loggingLevelMenuItem = BuildLoggingLevelMenuItem();
             _menu = BuildMenu();
 
             _trayIcon.ContextMenuStrip = _menu;
@@ -104,6 +106,7 @@ namespace GhostThrough
             menu.Items.Add(_activationMethodMenuItem);
             menu.Items.Add(_activationModeMenuItem);
             menu.Items.Add(_activationDelayMenuItem);
+            menu.Items.Add(_loggingLevelMenuItem);
             menu.Items.Add(new ToolStripSeparator());
 
             var exitItem = new ToolStripMenuItem("Exit");
@@ -148,6 +151,22 @@ namespace GhostThrough
             item.DropDownItems.Add(new ToolStripMenuItem("Mouse (Right Button)", null, OnActivationMethodMouseRightClick));
             item.DropDownItems.Add(new ToolStripMenuItem("Mouse (X1 Button)", null, OnActivationMethodMouseX1Click));
             item.DropDownItems.Add(new ToolStripMenuItem("Mouse (X2 Button)", null, OnActivationMethodMouseX2Click));
+
+            return item;
+        }
+
+        private ToolStripMenuItem BuildLoggingLevelMenuItem()
+        {
+            var item = new ToolStripMenuItem("Logging Level");
+            item.DropDownOpening += (s, e) => RefreshLoggingLevelMenu(item);
+
+            var infoItem = new ToolStripMenuItem("Info", null, OnLoggingLevelInfoClick);
+            infoItem.Tag = DebugLogger.LEVEL_INFO;
+            item.DropDownItems.Add(infoItem);
+
+            var debugItem = new ToolStripMenuItem("Debug", null, OnLoggingLevelDebugClick);
+            debugItem.Tag = DebugLogger.LEVEL_DEBUG;
+            item.DropDownItems.Add(debugItem);
 
             return item;
         }
@@ -286,6 +305,21 @@ namespace GhostThrough
             }
         }
 
+        private void RefreshLoggingLevelMenu(ToolStripMenuItem item)
+        {
+            string selectedLevel = DebugLogger.NormalizeLogLevel(_appContext.Settings.Logging.Level);
+
+            foreach (ToolStripItem dropDownItem in item.DropDownItems)
+            {
+                var levelItem = dropDownItem as ToolStripMenuItem;
+                if (levelItem == null || !(levelItem.Tag is string))
+                    continue;
+
+                string level = (string)levelItem.Tag;
+                levelItem.Checked = string.Equals(level, selectedLevel, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
         private void OnActivationKeyClick(object sender, EventArgs e)
         {
             if (_disposed)
@@ -350,6 +384,16 @@ namespace GhostThrough
             ReconfigureActivationMode(ActivationMode.Click);
         }
 
+        private void OnLoggingLevelInfoClick(object sender, EventArgs e)
+        {
+            ReconfigureLogLevel(DebugLogger.LEVEL_INFO);
+        }
+
+        private void OnLoggingLevelDebugClick(object sender, EventArgs e)
+        {
+            ReconfigureLogLevel(DebugLogger.LEVEL_DEBUG);
+        }
+
         private void ReconfigureActivationMethod(ActivationInputType activationType, int mouseButton)
         {
             if (_disposed)
@@ -364,6 +408,14 @@ namespace GhostThrough
                 return;
 
             _appContext.ReconfigureActivationMode(activationMode);
+        }
+
+        private void ReconfigureLogLevel(string logLevel)
+        {
+            if (_disposed)
+                return;
+
+            _appContext.ReconfigureLogLevel(logLevel);
         }
 
         public void Dispose()
