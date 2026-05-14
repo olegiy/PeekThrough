@@ -944,12 +944,17 @@ namespace GhostThrough.Tests
 
         private static void ShouldExposeKnownActivationKeys()
         {
-            if (!ActivationKeyCatalog.AvailableKeys.Contains(NativeMethods.VK_LWIN))
+            if (!ActivationKeyCatalog.AvailableChoices.Any(choice => choice.KeyCode == NativeMethods.VK_LWIN && choice.Behavior == ActivationKeyBehavior.Standard))
             {
-                throw new InvalidOperationException("FAIL: ActivationKeyCatalog does not expose Left Win.");
+                throw new InvalidOperationException("FAIL: ActivationKeyCatalog does not expose Win standard.");
             }
 
-            if (ActivationKeyCatalog.GetDisplayName(NativeMethods.VK_ESCAPE) != "Escape")
+            if (!ActivationKeyCatalog.AvailableChoices.Any(choice => choice.KeyCode == NativeMethods.VK_LWIN && choice.Behavior == ActivationKeyBehavior.WinReverse))
+            {
+                throw new InvalidOperationException("FAIL: ActivationKeyCatalog does not expose Win reverse.");
+            }
+
+            if (ActivationKeyCatalog.GetDisplayName(NativeMethods.VK_ESCAPE, ActivationKeyBehavior.Standard) != "Escape")
             {
                 throw new InvalidOperationException("FAIL: ActivationKeyCatalog display name for Escape changed unexpectedly.");
             }
@@ -1024,6 +1029,8 @@ namespace GhostThrough.Tests
         private sealed class TestActivationHost : IActivationHost
         {
             public int ActivationKeyCode { get; set; } = NativeMethods.VK_LWIN;
+            public ActivationKeyBehavior ActivationKeyBehavior { get; set; } = ActivationKeyBehavior.Standard;
+            public bool ShouldUseReverseWinKeyBehavior { get; set; }
             public bool ShouldSuppressActivationKey { get; set; }
             public bool IsGhostModeActive { get; set; }
             public int KeyboardHandoffCount { get; private set; }
@@ -1050,6 +1057,18 @@ namespace GhostThrough.Tests
             public void OnKeyboardHandoffDuringActivationHold()
             {
                 KeyboardHandoffCount++;
+            }
+
+            public void OnReverseWinKeyDown()
+            {
+            }
+
+            public void OnReverseWinKeyUp()
+            {
+            }
+
+            public void OnReverseWinKeyPassThrough()
+            {
             }
 
             public bool ProcessHotkey(int vkCode, bool isDown, bool ctrl, bool shift, bool alt)

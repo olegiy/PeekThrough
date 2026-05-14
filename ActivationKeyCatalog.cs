@@ -4,6 +4,20 @@ namespace GhostThrough
 {
     internal static class ActivationKeyCatalog
     {
+        internal sealed class ActivationKeyChoice
+        {
+            public int KeyCode { get; private set; }
+            public ActivationKeyBehavior Behavior { get; private set; }
+            public string DisplayName { get; private set; }
+
+            public ActivationKeyChoice(int keyCode, ActivationKeyBehavior behavior, string displayName)
+            {
+                KeyCode = keyCode;
+                Behavior = behavior;
+                DisplayName = displayName;
+            }
+        }
+
         private static readonly Dictionary<int, string> KeyDisplayNames = new Dictionary<int, string>
         {
             { NativeMethods.VK_LWIN, "Left Win" },
@@ -49,30 +63,70 @@ namespace GhostThrough
             { 0x7B, "F12" },
         };
 
-        private static readonly int[] Keys = new[]
+        private static readonly ActivationKeyChoice[] Choices = new[]
         {
-            NativeMethods.VK_LWIN, NativeMethods.VK_RWIN,
-            NativeMethods.VK_CAPITAL, NativeMethods.VK_TAB,
-            NativeMethods.VK_SPACE, NativeMethods.VK_ESCAPE,
-            NativeMethods.VK_OEM_3, NativeMethods.VK_INSERT,
-            NativeMethods.VK_DELETE, NativeMethods.VK_HOME,
-            NativeMethods.VK_END, NativeMethods.VK_PRIOR,
-            NativeMethods.VK_NEXT, 0x30, 0x31, 0x32, 0x33,
-            0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-            0x70, 0x71, 0x72, 0x73, 0x74, 0x75,
-            0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B,
+            new ActivationKeyChoice(NativeMethods.VK_LWIN, ActivationKeyBehavior.Standard, "Win standard"),
+            new ActivationKeyChoice(NativeMethods.VK_LWIN, ActivationKeyBehavior.WinReverse, "Win reverse"),
+            new ActivationKeyChoice(NativeMethods.VK_RWIN, ActivationKeyBehavior.Standard, "Right Win"),
+            new ActivationKeyChoice(NativeMethods.VK_CAPITAL, ActivationKeyBehavior.Standard, "Caps Lock"),
+            new ActivationKeyChoice(NativeMethods.VK_TAB, ActivationKeyBehavior.Standard, "Tab"),
+            new ActivationKeyChoice(NativeMethods.VK_SPACE, ActivationKeyBehavior.Standard, "Space"),
+            new ActivationKeyChoice(NativeMethods.VK_ESCAPE, ActivationKeyBehavior.Standard, "Escape"),
+            new ActivationKeyChoice(NativeMethods.VK_OEM_3, ActivationKeyBehavior.Standard, "Tilde (`~)"),
+            new ActivationKeyChoice(NativeMethods.VK_INSERT, ActivationKeyBehavior.Standard, "Insert"),
+            new ActivationKeyChoice(NativeMethods.VK_DELETE, ActivationKeyBehavior.Standard, "Delete"),
+            new ActivationKeyChoice(NativeMethods.VK_HOME, ActivationKeyBehavior.Standard, "Home"),
+            new ActivationKeyChoice(NativeMethods.VK_END, ActivationKeyBehavior.Standard, "End"),
+            new ActivationKeyChoice(NativeMethods.VK_PRIOR, ActivationKeyBehavior.Standard, "Page Up"),
+            new ActivationKeyChoice(NativeMethods.VK_NEXT, ActivationKeyBehavior.Standard, "Page Down"),
+            new ActivationKeyChoice(0x30, ActivationKeyBehavior.Standard, "0"),
+            new ActivationKeyChoice(0x31, ActivationKeyBehavior.Standard, "1"),
+            new ActivationKeyChoice(0x32, ActivationKeyBehavior.Standard, "2"),
+            new ActivationKeyChoice(0x33, ActivationKeyBehavior.Standard, "3"),
+            new ActivationKeyChoice(0x34, ActivationKeyBehavior.Standard, "4"),
+            new ActivationKeyChoice(0x35, ActivationKeyBehavior.Standard, "5"),
+            new ActivationKeyChoice(0x36, ActivationKeyBehavior.Standard, "6"),
+            new ActivationKeyChoice(0x37, ActivationKeyBehavior.Standard, "7"),
+            new ActivationKeyChoice(0x38, ActivationKeyBehavior.Standard, "8"),
+            new ActivationKeyChoice(0x39, ActivationKeyBehavior.Standard, "9"),
+            new ActivationKeyChoice(0x70, ActivationKeyBehavior.Standard, "F1"),
+            new ActivationKeyChoice(0x71, ActivationKeyBehavior.Standard, "F2"),
+            new ActivationKeyChoice(0x72, ActivationKeyBehavior.Standard, "F3"),
+            new ActivationKeyChoice(0x73, ActivationKeyBehavior.Standard, "F4"),
+            new ActivationKeyChoice(0x74, ActivationKeyBehavior.Standard, "F5"),
+            new ActivationKeyChoice(0x75, ActivationKeyBehavior.Standard, "F6"),
+            new ActivationKeyChoice(0x76, ActivationKeyBehavior.Standard, "F7"),
+            new ActivationKeyChoice(0x77, ActivationKeyBehavior.Standard, "F8"),
+            new ActivationKeyChoice(0x78, ActivationKeyBehavior.Standard, "F9"),
+            new ActivationKeyChoice(0x79, ActivationKeyBehavior.Standard, "F10"),
+            new ActivationKeyChoice(0x7A, ActivationKeyBehavior.Standard, "F11"),
+            new ActivationKeyChoice(0x7B, ActivationKeyBehavior.Standard, "F12"),
         };
+
+        public static IReadOnlyList<ActivationKeyChoice> AvailableChoices
+        {
+            get { return Choices; }
+        }
 
         public static IReadOnlyList<int> AvailableKeys
         {
-            get { return Keys; }
+            get
+            {
+                var keys = new List<int>();
+                foreach (ActivationKeyChoice choice in Choices)
+                {
+                    if (!keys.Contains(choice.KeyCode))
+                        keys.Add(choice.KeyCode);
+                }
+                return keys;
+            }
         }
 
         public static bool IsSupportedKey(int vkCode)
         {
-            for (int i = 0; i < Keys.Length; i++)
+            foreach (ActivationKeyChoice choice in Choices)
             {
-                if (Keys[i] == vkCode)
+                if (choice.KeyCode == vkCode)
                     return true;
             }
 
@@ -85,6 +139,17 @@ namespace GhostThrough
             return KeyDisplayNames.TryGetValue(vkCode, out name)
                 ? name
                 : string.Format("Key 0x{0:X2}", vkCode);
+        }
+
+        public static string GetDisplayName(int vkCode, ActivationKeyBehavior behavior)
+        {
+            foreach (ActivationKeyChoice choice in Choices)
+            {
+                if (choice.KeyCode == vkCode && choice.Behavior == behavior)
+                    return choice.DisplayName;
+            }
+
+            return GetDisplayName(vkCode);
         }
     }
 }

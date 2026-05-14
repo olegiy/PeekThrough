@@ -176,11 +176,10 @@ namespace GhostThrough
             var item = new ToolStripMenuItem("Activation Key");
             item.DropDownOpening += (s, e) => RefreshActivationKeyMenu(item);
 
-            foreach (int vkCode in ActivationKeyCatalog.AvailableKeys)
+            foreach (ActivationKeyCatalog.ActivationKeyChoice choice in ActivationKeyCatalog.AvailableChoices)
             {
-                int key = vkCode;
-                var keyItem = new ToolStripMenuItem(ActivationKeyCatalog.GetDisplayName(vkCode));
-                keyItem.Tag = key;
+                var keyItem = new ToolStripMenuItem(choice.DisplayName);
+                keyItem.Tag = choice;
                 keyItem.Click += OnActivationKeyClick;
                 item.DropDownItems.Add(keyItem);
             }
@@ -264,15 +263,16 @@ namespace GhostThrough
         private void RefreshActivationKeyMenu(ToolStripMenuItem item)
         {
             int selectedKey = _appContext.Settings.Activation.KeyCode;
+            ActivationKeyBehavior selectedBehavior = _appContext.Settings.Activation.KeyBehavior.ToActivationKeyBehavior();
 
             foreach (ToolStripItem dropDownItem in item.DropDownItems)
             {
                 var keyItem = dropDownItem as ToolStripMenuItem;
-                if (keyItem == null)
+                if (keyItem == null || !(keyItem.Tag is ActivationKeyCatalog.ActivationKeyChoice))
                     continue;
 
-                int key = (int)keyItem.Tag;
-                keyItem.Checked = key == selectedKey;
+                var choice = (ActivationKeyCatalog.ActivationKeyChoice)keyItem.Tag;
+                keyItem.Checked = choice.KeyCode == selectedKey && choice.Behavior == selectedBehavior;
             }
         }
 
@@ -326,14 +326,15 @@ namespace GhostThrough
                 return;
 
             var item = sender as ToolStripMenuItem;
-            if (item == null || !(item.Tag is int))
+            if (item == null || !(item.Tag is ActivationKeyCatalog.ActivationKeyChoice))
                 return;
 
-            int key = (int)item.Tag;
+            var choice = (ActivationKeyCatalog.ActivationKeyChoice)item.Tag;
             _appContext.Reconfigure(
                 _appContext.Settings.Activation.Type.ToActivationInputType(),
-                key,
-                _appContext.Settings.Activation.MouseButton);
+                choice.KeyCode,
+                _appContext.Settings.Activation.MouseButton,
+                choice.Behavior);
         }
 
         private void OnActivationMethodKeyboardClick(object sender, EventArgs e)

@@ -28,6 +28,7 @@ namespace GhostThrough
         // Current target window (under cursor when activated)
         private IntPtr _currentTargetHwnd = IntPtr.Zero;
         private int _activationKeyCode;
+        private ActivationKeyBehavior _activationKeyBehavior;
         private bool _deactivationInProgress;
 
         // Disposable tracking
@@ -64,6 +65,22 @@ namespace GhostThrough
             set { _activationKeyCode = NormalizeActivationKeyCode(value); }
         }
 
+        public ActivationKeyBehavior ActivationKeyBehavior
+        {
+            get { return _activationKeyBehavior; }
+            set { _activationKeyBehavior = value; }
+        }
+
+        public bool ShouldUseReverseWinKeyBehavior
+        {
+            get
+            {
+                return CurrentActivationType == ActivationInputType.Keyboard &&
+                       _activationKeyBehavior == ActivationKeyBehavior.WinReverse &&
+                       IsWinKey(ActivationKeyCode);
+            }
+        }
+
         public ActivationInputType CurrentActivationType
         {
             get { return _activationState.CurrentActivationType; }
@@ -90,6 +107,7 @@ namespace GhostThrough
             _profileManager = profileManager ?? new ProfileManager((IEnumerable<Profile>)null);
             _hotkeyManager = new HotkeyManager();
             ActivationKeyCode = NativeMethods.VK_LWIN;
+            ActivationKeyBehavior = ActivationKeyBehavior.Standard;
 
             WireEvents();
         }
@@ -197,6 +215,20 @@ namespace GhostThrough
             _activationState.OnActivationKeyUp();
         }
 
+        public void OnReverseWinKeyDown()
+        {
+            OnKeyDown();
+        }
+
+        public void OnReverseWinKeyUp()
+        {
+            OnKeyUp();
+        }
+
+        public void OnReverseWinKeyPassThrough()
+        {
+        }
+
         public void OnMouseButtonDown()
         {
             if (CurrentActivationType != ActivationInputType.Mouse)
@@ -277,6 +309,11 @@ namespace GhostThrough
                    vkCode == NativeMethods.VK_RSHIFT ||
                    vkCode == NativeMethods.VK_LMENU ||
                    vkCode == NativeMethods.VK_RMENU;
+        }
+
+        private static bool IsWinKey(int vkCode)
+        {
+            return vkCode == NativeMethods.VK_LWIN || vkCode == NativeMethods.VK_RWIN;
         }
 
         // Core Ghost Mode activation

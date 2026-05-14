@@ -33,6 +33,7 @@ namespace GhostThrough
 
             var controller = new GhostController(activationType, profileManager, settings.Activation.ActivationDelayMs, activationMode);
             controller.ActivationKeyCode = GhostController.NormalizeActivationKeyCode(settings.Activation.KeyCode);
+            controller.ActivationKeyBehavior = settings.Activation.KeyBehavior.ToActivationKeyBehavior();
             DebugLogger.SetLevel(settings.Logging.Level);
 
             var appContext = new AppContext
@@ -104,10 +105,20 @@ namespace GhostThrough
 
         public void Reconfigure(ActivationInputType activationType, int activationKeyCode, int mouseButton)
         {
-            Reconfigure(activationType, activationKeyCode, mouseButton, Settings.Activation.ActivationDelayMs);
+            Reconfigure(activationType, activationKeyCode, mouseButton, Settings.Activation.ActivationDelayMs, Settings.Activation.KeyBehavior.ToActivationKeyBehavior());
+        }
+
+        public void Reconfigure(ActivationInputType activationType, int activationKeyCode, int mouseButton, ActivationKeyBehavior keyBehavior)
+        {
+            Reconfigure(activationType, activationKeyCode, mouseButton, Settings.Activation.ActivationDelayMs, keyBehavior);
         }
 
         public void Reconfigure(ActivationInputType activationType, int activationKeyCode, int mouseButton, int activationDelayMs)
+        {
+            Reconfigure(activationType, activationKeyCode, mouseButton, activationDelayMs, Settings.Activation.KeyBehavior.ToActivationKeyBehavior());
+        }
+
+        public void Reconfigure(ActivationInputType activationType, int activationKeyCode, int mouseButton, int activationDelayMs, ActivationKeyBehavior keyBehavior)
         {
             if (Controller.IsGhostModeActive)
                 Controller.DeactivateGhostMode();
@@ -115,15 +126,19 @@ namespace GhostThrough
             Controller.OnOtherInputBeforeActivation();
 
             activationKeyCode = GhostController.NormalizeActivationKeyCode(activationKeyCode);
+            if (activationKeyCode != NativeMethods.VK_LWIN && activationKeyCode != NativeMethods.VK_RWIN)
+                keyBehavior = ActivationKeyBehavior.Standard;
 
             Controller.CurrentActivationType = activationType;
             Controller.ActivationKeyCode = activationKeyCode;
+            Controller.ActivationKeyBehavior = keyBehavior;
             Controller.ActivationDelayMs = activationDelayMs;
             Controller.CurrentActivationMode = Settings.Activation.Mode.ToActivationMode();
             MouseHook.SetSelectedMouseButton(mouseButton);
 
             Settings.Activation.Type = activationType.ToSettingsValue();
             Settings.Activation.KeyCode = activationKeyCode;
+            Settings.Activation.KeyBehavior = keyBehavior.ToSettingsValue();
             Settings.Activation.MouseButton = mouseButton;
             Settings.Activation.ActivationDelayMs = Controller.ActivationDelayMs;
 
