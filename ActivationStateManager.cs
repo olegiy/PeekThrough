@@ -30,6 +30,8 @@ namespace GhostThrough
         public event Func<bool> OnGhostModeShouldActivate;
         public event Action OnGhostModeShouldDeactivate;
         public event Action OnActivationBlocked;
+        public event Action OnReverseWinShouldToggleGhostMode;
+        public event Action OnReverseWinShouldPassThrough;
 
         // State (thread-safe via lock)
         private readonly object _lockObject = new object();
@@ -37,6 +39,7 @@ namespace GhostThrough
         private bool _isMouseButtonDown;
         private bool _ghostModeActive;
         private bool _timerFired;
+        private bool _reverseWinPending;
         private bool _suppressActivationKey;
         private ActivationInputType _activationType;
         private ActivationMode _activationMode;
@@ -213,6 +216,44 @@ namespace GhostThrough
             }
         }
 
+        public void OnReverseWinKeyDown()
+        {
+            if (_activationType != ActivationInputType.Keyboard)
+                return;
+
+            lock (_lockObject)
+            {
+                if (_isActivationKeyDown)
+                    return;
+
+                _isActivationKeyDown = true;
+                _timerFired = false;
+                _reverseWinPending = true;
+                _activationTimer.Stop();
+                _activationTimer.Start();
+            }
+        }
+
+        public void OnReverseWinKeyUp()
+        {
+            Action toggleHandler = null;
+
+            lock (_lockObject)
+            {
+                _isActivationKeyDown = false;
+                _activationTimer.Stop();
+
+                if (_reverseWinPending && !_timerFired)
+                    toggleHandler = OnReverseWinShouldToggleGhostMode;
+
+                _reverseWinPending = false;
+                _timerFired = false;
+            }
+
+            if (toggleHandler != null)
+                toggleHandler();
+        }
+
         public void OnMouseButtonDown()
         {
             if (_activationType != ActivationInputType.Mouse)
@@ -268,6 +309,7 @@ namespace GhostThrough
                 _isActivationKeyDown = false;
                 _isMouseButtonDown = false;
                 _timerFired = false;
+                _reverseWinPending = false;
                 _activationTimer.Stop();
                 if (OnActivationBlocked != null)
                     OnActivationBlocked();
@@ -296,6 +338,7 @@ namespace GhostThrough
 
                 _isActivationKeyDown = false;
                 _timerFired = false;
+                _reverseWinPending = false;
                 _suppressActivationKey = false;
 
                 if (shouldDeactivate)
@@ -316,6 +359,16 @@ namespace GhostThrough
             lock (_lockObject)
             {
                 _activationTimer.Stop();
+
+                if (_reverseWinPending && _isActivationKeyDown)
+                {
+                    _timerFired = true;
+                    _reverseWinPending = false;
+                    var passThroughHandler = OnReverseWinShouldPassThrough;
+                    if (passThroughHandler != null)
+                        passThroughHandler();
+                    return;
+                }
 
                 bool shouldActivate = false;
                 if (_activationType == ActivationInputType.Keyboard)
@@ -370,6 +423,7 @@ namespace GhostThrough
                 _isActivationKeyDown = false;
                 _isMouseButtonDown = false;
                 _timerFired = false;
+                _reverseWinPending = false;
                 _activationTimer.Stop();
                 _ghostModeActive = false;
                 _suppressActivationKey = true;

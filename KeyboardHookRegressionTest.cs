@@ -47,6 +47,7 @@ namespace GhostThrough.Tests
                 ShouldOnlyDeactivateGhostModeOncePerRequest();
                 ShouldClearActivationStateEvenWithoutTrackedGhostWindow();
                 ShouldDeactivateKeyboardClickModeOnKeyUpAfterActivation();
+                ShouldToggleReverseWinOnShortPress();
                 ShouldNormalizeInvalidActivationSettingsOnLoad();
                 ShouldNormalizeInvalidActivationKeyBehaviorOnLoad();
                 ShouldPreserveActivationKeyBehaviorDuringRoundTrip();
@@ -935,6 +936,32 @@ namespace GhostThrough.Tests
                 {
                     throw new InvalidOperationException("FAIL: Click mode did not deactivate when the activation key was released.");
                 }
+            }
+            finally
+            {
+                manager.Dispose();
+            }
+        }
+
+        private static void ShouldToggleReverseWinOnShortPress()
+        {
+            var manager = new ActivationStateManager(ActivationInputType.Keyboard);
+            int toggles = 0;
+            int passThroughs = 0;
+
+            try
+            {
+                manager.OnReverseWinShouldToggleGhostMode += () => toggles++;
+                manager.OnReverseWinShouldPassThrough += () => passThroughs++;
+
+                manager.OnReverseWinKeyDown();
+                manager.OnReverseWinKeyUp();
+
+                if (toggles != 1)
+                    throw new InvalidOperationException(string.Format("FAIL: Reverse Win short press toggled Ghost Mode {0} times instead of once.", toggles));
+
+                if (passThroughs != 0)
+                    throw new InvalidOperationException("FAIL: Reverse Win short press requested standard Win pass-through.");
             }
             finally
             {

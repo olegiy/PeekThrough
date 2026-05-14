@@ -117,6 +117,8 @@ namespace GhostThrough
             // Activation state events
             _activationState.OnGhostModeShouldActivate += OnGhostModeShouldActivate;
             _activationState.OnGhostModeShouldDeactivate += OnGhostModeShouldDeactivate;
+            _activationState.OnReverseWinShouldToggleGhostMode += OnReverseWinShouldToggleGhostMode;
+            _activationState.OnReverseWinShouldPassThrough += OnReverseWinShouldPassThrough;
 
             // Profile change events
             _profileManager.OnProfileChanged += OnProfileChanged;
@@ -217,16 +219,36 @@ namespace GhostThrough
 
         public void OnReverseWinKeyDown()
         {
-            OnKeyDown();
+            if (!ShouldUseReverseWinKeyBehavior)
+                return;
+
+            _activationState.OnReverseWinKeyDown();
         }
 
         public void OnReverseWinKeyUp()
         {
-            OnKeyUp();
+            if (!ShouldUseReverseWinKeyBehavior)
+                return;
+
+            _activationState.OnReverseWinKeyUp();
         }
 
         public void OnReverseWinKeyPassThrough()
         {
+            SendStandaloneWinKey();
+        }
+
+        private void OnReverseWinShouldToggleGhostMode()
+        {
+            if (_activationState.IsGhostModeActive)
+                DeactivateGhostMode();
+            else
+                ActivateGhostMode();
+        }
+
+        private void OnReverseWinShouldPassThrough()
+        {
+            SendStandaloneWinKey();
         }
 
         public void OnMouseButtonDown()
@@ -314,6 +336,26 @@ namespace GhostThrough
         private static bool IsWinKey(int vkCode)
         {
             return vkCode == NativeMethods.VK_LWIN || vkCode == NativeMethods.VK_RWIN;
+        }
+
+        private void SendStandaloneWinKey()
+        {
+            NativeMethods.INPUT[] inputs = new NativeMethods.INPUT[2];
+            inputs[0].type = NativeMethods.INPUT_KEYBOARD;
+            inputs[0].U.ki.wVk = (ushort)ActivationKeyCode;
+            inputs[0].U.ki.dwFlags = NativeMethods.KEYEVENTF_EXTENDEDKEY;
+            inputs[0].U.ki.time = 0;
+            inputs[0].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
+
+            inputs[1].type = NativeMethods.INPUT_KEYBOARD;
+            inputs[1].U.ki.wVk = (ushort)ActivationKeyCode;
+            inputs[1].U.ki.dwFlags = NativeMethods.KEYEVENTF_EXTENDEDKEY | NativeMethods.KEYEVENTF_KEYUP;
+            inputs[1].U.ki.time = 0;
+            inputs[1].U.ki.dwExtraInfo = NativeMethods.INJECTED_BY_US;
+
+            uint sent = NativeMethods.SendInput(2, inputs, NativeMethods.INPUT.Size);
+            if (sent != 2)
+                DebugLogger.Log(string.Format("GhostController: SendStandaloneWinKey sent {0} inputs instead of 2", sent));
         }
 
         // Core Ghost Mode activation
