@@ -41,6 +41,7 @@ namespace GhostThrough.Tests
             {
                 ShouldConvertActivationTypeStrings();
                 ShouldConvertActivationModeStrings();
+                ShouldConvertActivationKeyBehaviorStrings();
                 ShouldExposeKnownActivationKeys();
                 ShouldExposeControllerThroughActivationHost();
                 ShouldOnlyDeactivateGhostModeOncePerRequest();
@@ -805,6 +806,29 @@ namespace GhostThrough.Tests
             if (ActivationMode.Click.ToSettingsValue() != "click")
             {
                 throw new InvalidOperationException("FAIL: ActivationMode.Click did not serialize to click.");
+            }
+        }
+
+        private static void ShouldConvertActivationKeyBehaviorStrings()
+        {
+            if ("standard".ToActivationKeyBehavior() != ActivationKeyBehavior.Standard)
+            {
+                throw new InvalidOperationException("FAIL: standard string did not map to ActivationKeyBehavior.Standard.");
+            }
+
+            if ("win-reverse".ToActivationKeyBehavior() != ActivationKeyBehavior.WinReverse)
+            {
+                throw new InvalidOperationException("FAIL: win-reverse string did not map to ActivationKeyBehavior.WinReverse.");
+            }
+
+            if ("invalid".ToActivationKeyBehavior() != ActivationKeyBehavior.Standard)
+            {
+                throw new InvalidOperationException("FAIL: invalid behavior string did not normalize to ActivationKeyBehavior.Standard.");
+            }
+
+            if (ActivationKeyBehavior.WinReverse.ToSettingsValue() != "win-reverse")
+            {
+                throw new InvalidOperationException("FAIL: ActivationKeyBehavior.WinReverse did not serialize to win-reverse.");
             }
         }
 

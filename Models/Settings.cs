@@ -43,6 +43,8 @@ namespace GhostThrough.Models
         public int ActivationDelayMs { get; set; }
         [DataMember(Order = 5)]
         public string Mode { get; set; }
+        [DataMember(Order = 6)]
+        public string KeyBehavior { get; set; }
 
         public ActivationSettings()
         {
@@ -51,6 +53,7 @@ namespace GhostThrough.Models
             MouseButton = NativeMethods.VK_MBUTTON;
             ActivationDelayMs = ActivationStateManager.DEFAULT_ACTIVATION_DELAY_MS;
             Mode = "hold";
+            KeyBehavior = "standard";
         }
     }
 

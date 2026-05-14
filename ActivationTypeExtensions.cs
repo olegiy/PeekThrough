@@ -27,5 +27,17 @@ namespace GhostThrough
         {
             return value == ActivationMode.Click ? "click" : "hold";
         }
+
+        public static ActivationKeyBehavior ToActivationKeyBehavior(this string value)
+        {
+            return string.Equals(value, "win-reverse", StringComparison.OrdinalIgnoreCase)
+                ? ActivationKeyBehavior.WinReverse
+                : ActivationKeyBehavior.Standard;
+        }
+
+        public static string ToSettingsValue(this ActivationKeyBehavior value)
+        {
+            return value == ActivationKeyBehavior.WinReverse ? "win-reverse" : "standard";
+        }
     }
 }

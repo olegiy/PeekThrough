@@ -15,6 +15,12 @@ namespace GhostThrough
         Click
     }
 
+    internal enum ActivationKeyBehavior
+    {
+        Standard,
+        WinReverse
+    }
+
     /// <summary>
     /// Tracks activation key/mouse state, manages timers, fires activation events
     /// </summary>
