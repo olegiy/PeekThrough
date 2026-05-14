@@ -48,6 +48,8 @@ namespace GhostThrough.Tests
                 ShouldClearActivationStateEvenWithoutTrackedGhostWindow();
                 ShouldDeactivateKeyboardClickModeOnKeyUpAfterActivation();
                 ShouldNormalizeInvalidActivationSettingsOnLoad();
+                ShouldNormalizeInvalidActivationKeyBehaviorOnLoad();
+                ShouldPreserveActivationKeyBehaviorDuringRoundTrip();
                 ShouldRoundTripSettingsThroughAtomicSave();
                 ShouldSanitizeInvalidProfilesOnLoad();
                 ShouldNormalizeProfileActiveIdOnLoad();
@@ -508,6 +510,76 @@ namespace GhostThrough.Tests
             }
         }
 
+        private static void ShouldNormalizeInvalidActivationKeyBehaviorOnLoad()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughBehaviorSettingsTest_" + Guid.NewGuid().ToString("N"));
+            string settingsPath = Path.Combine(tempDir, "settings.json");
+
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                var settings = new Settings();
+                settings.Activation.KeyCode = NativeMethods.VK_LWIN;
+                settings.Activation.KeyBehavior = "unknown";
+                File.WriteAllText(settingsPath, JsonFileSerializer.Serialize(settings));
+
+                var manager = new SettingsManager(settingsPath);
+                Settings loaded = manager.LoadSettings();
+
+                if (loaded.Activation.KeyBehavior != "standard")
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not normalize invalid activation key behavior to standard.");
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static void ShouldPreserveActivationKeyBehaviorDuringRoundTrip()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "GhostThroughBehaviorRoundTripTest_" + Guid.NewGuid().ToString("N"));
+            string settingsPath = Path.Combine(tempDir, "settings.json");
+
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                var original = new Settings();
+                original.Activation.KeyCode = NativeMethods.VK_LWIN;
+                original.Activation.KeyBehavior = "win-reverse";
+
+                var manager = new SettingsManager(settingsPath);
+                manager.SaveSettings(original);
+                Settings loaded = manager.LoadSettings();
+
+                if (loaded.Activation.KeyBehavior != "win-reverse")
+                {
+                    throw new InvalidOperationException("FAIL: SettingsManager did not preserve win-reverse activation key behavior.");
+                }
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempDir))
+                        Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+
         private static void ShouldNotNotifyWhenSettingSameActiveProfile()
         {
             var manager = new ProfileManager();
@@ -541,6 +613,7 @@ namespace GhostThrough.Tests
                 original.Activation.MouseButton = NativeMethods.VK_XBUTTON1;
                 original.Activation.ActivationDelayMs = 1300;
                 original.Activation.Mode = "click";
+                original.Activation.KeyBehavior = "win-reverse";
                 original.Profiles.List = new List<ProfileData>
                 {
                     new ProfileData { Id = "custom_1", Name = "15%", Opacity = 38 },
@@ -569,7 +642,8 @@ namespace GhostThrough.Tests
                     loaded.Activation.KeyCode != NativeMethods.VK_SPACE ||
                     loaded.Activation.MouseButton != NativeMethods.VK_XBUTTON1 ||
                     loaded.Activation.ActivationDelayMs != 1300 ||
-                    loaded.Activation.Mode != "click")
+                    loaded.Activation.Mode != "click" ||
+                    loaded.Activation.KeyBehavior != "win-reverse")
                 {
                     throw new InvalidOperationException("FAIL: SettingsManager did not preserve activation settings during round-trip save/load.");
                 }

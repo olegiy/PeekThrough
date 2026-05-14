@@ -195,6 +195,13 @@ namespace GhostThrough
                 changed = true;
             }
 
+            string normalizedKeyBehavior = settings.Activation.KeyBehavior.ToActivationKeyBehavior().ToSettingsValue();
+            if (!string.Equals(settings.Activation.KeyBehavior, normalizedKeyBehavior, StringComparison.OrdinalIgnoreCase))
+            {
+                settings.Activation.KeyBehavior = normalizedKeyBehavior;
+                changed = true;
+            }
+
             return changed;
         }
 
