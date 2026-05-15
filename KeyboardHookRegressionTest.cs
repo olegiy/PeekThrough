@@ -45,9 +45,11 @@ namespace GhostThrough.Tests
                 ShouldExposeKnownActivationKeys();
                 ShouldExposeControllerThroughActivationHost();
                 ShouldOnlyDeactivateGhostModeOncePerRequest();
+                ShouldDeactivateReverseWinWhenActivationStateIsActiveWithoutTrackedWindow();
                 ShouldClearActivationStateEvenWithoutTrackedGhostWindow();
                 ShouldDeactivateKeyboardClickModeOnKeyUpAfterActivation();
                 ShouldToggleReverseWinOnShortPress();
+                ShouldTrackReverseWinGhostModeAcrossShortPressToggle();
                 ShouldNormalizeInvalidActivationSettingsOnLoad();
                 ShouldNormalizeInvalidActivationKeyBehaviorOnLoad();
                 ShouldPreserveActivationKeyBehaviorDuringRoundTrip();
@@ -607,6 +609,32 @@ namespace GhostThrough.Tests
             }
         }
 
+        private static void ShouldDeactivateReverseWinWhenActivationStateIsActiveWithoutTrackedWindow()
+        {
+            var controller = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
+
+            try
+            {
+                controller.ActivationKeyBehavior = ActivationKeyBehavior.WinReverse;
+                object activationState = GetPrivateField(controller, "_activationState");
+                SetPrivateField(activationState, "_ghostModeActive", true);
+                SetPrivateField(controller, "_currentTargetHwnd", IntPtr.Zero);
+
+                InvokePrivateMethod(controller, "OnReverseWinShouldToggleGhostMode");
+
+                bool ghostModeActive = (bool)GetPrivateField(activationState, "_ghostModeActive");
+                if (ghostModeActive)
+                {
+                    throw new InvalidOperationException(
+                        "FAIL: Reverse Win short press did not deactivate Ghost Mode when activation state was active without a tracked window.");
+                }
+            }
+            finally
+            {
+                controller.Dispose();
+            }
+        }
+
         private static void ShouldClearActivationStateEvenWithoutTrackedGhostWindow()
         {
             var controller = new GhostController(ActivationInputType.Keyboard, new ProfileManager());
@@ -1130,7 +1158,11 @@ namespace GhostThrough.Tests
 
             try
             {
-                manager.OnReverseWinShouldToggleGhostMode += () => toggles++;
+                manager.OnReverseWinShouldToggleGhostMode += () =>
+                {
+                    toggles++;
+                    return true;
+                };
                 manager.OnReverseWinShouldPassThrough += () => passThroughs++;
 
                 manager.OnReverseWinKeyDown();
@@ -1141,6 +1173,45 @@ namespace GhostThrough.Tests
 
                 if (passThroughs != 0)
                     throw new InvalidOperationException("FAIL: Reverse Win short press requested standard Win pass-through.");
+            }
+            finally
+            {
+                manager.Dispose();
+            }
+        }
+
+        private static void ShouldTrackReverseWinGhostModeAcrossShortPressToggle()
+        {
+            var manager = new ActivationStateManager(ActivationInputType.Keyboard);
+            int activations = 0;
+            int deactivations = 0;
+
+            try
+            {
+                manager.OnReverseWinShouldToggleGhostMode += () =>
+                {
+                    activations++;
+                    return true;
+                };
+                manager.OnGhostModeShouldDeactivate += () => deactivations++;
+
+                manager.OnReverseWinKeyDown();
+                manager.OnReverseWinKeyUp();
+
+                if (!manager.IsGhostModeActive)
+                    throw new InvalidOperationException("FAIL: Reverse Win short press did not mark Ghost Mode active after activation succeeded.");
+
+                manager.OnReverseWinKeyDown();
+                manager.OnReverseWinKeyUp();
+
+                if (manager.IsGhostModeActive)
+                    throw new InvalidOperationException("FAIL: Reverse Win short press did not deactivate active Ghost Mode.");
+
+                if (activations != 1)
+                    throw new InvalidOperationException(string.Format("FAIL: Reverse Win toggle activated {0} times instead of once.", activations));
+
+                if (deactivations != 1)
+                    throw new InvalidOperationException(string.Format("FAIL: Reverse Win toggle deactivated {0} times instead of once.", deactivations));
             }
             finally
             {

@@ -30,7 +30,7 @@ namespace GhostThrough
         public event Func<bool> OnGhostModeShouldActivate;
         public event Action OnGhostModeShouldDeactivate;
         public event Action OnActivationBlocked;
-        public event Action OnReverseWinShouldToggleGhostMode;
+        public event Func<bool> OnReverseWinShouldToggleGhostMode;
         public event Action OnReverseWinShouldPassThrough;
 
         // State (thread-safe via lock)
@@ -236,7 +236,8 @@ namespace GhostThrough
 
         public void OnReverseWinKeyUp()
         {
-            Action toggleHandler = null;
+            Func<bool> toggleHandler = null;
+            Action deactivateHandler = null;
 
             lock (_lockObject)
             {
@@ -244,14 +245,38 @@ namespace GhostThrough
                 _activationTimer.Stop();
 
                 if (_reverseWinPending && !_timerFired)
-                    toggleHandler = OnReverseWinShouldToggleGhostMode;
+                {
+                    if (_ghostModeActive)
+                    {
+                        _ghostModeActive = false;
+                        _suppressActivationKey = true;
+                        _suppressTimer.Stop();
+                        _suppressTimer.Start();
+                        deactivateHandler = OnGhostModeShouldDeactivate;
+                    }
+                    else
+                    {
+                        toggleHandler = OnReverseWinShouldToggleGhostMode;
+                    }
+                }
 
                 _reverseWinPending = false;
                 _timerFired = false;
             }
 
-            if (toggleHandler != null)
-                toggleHandler();
+            if (deactivateHandler != null)
+            {
+                deactivateHandler();
+                return;
+            }
+
+            if (toggleHandler != null && toggleHandler())
+            {
+                lock (_lockObject)
+                {
+                    _ghostModeActive = true;
+                }
+            }
         }
 
         public void OnMouseButtonDown()

@@ -240,12 +240,17 @@ namespace GhostThrough
             SendStandaloneWinKey();
         }
 
-        private void OnReverseWinShouldToggleGhostMode()
+        private bool OnReverseWinShouldToggleGhostMode()
         {
             if (_activationState.IsGhostModeActive)
+            {
                 DeactivateGhostMode();
+                return false;
+            }
             else
-                ActivateGhostMode();
+            {
+                return ActivateGhostMode();
+            }
         }
 
         private void OnReverseWinShouldPassThrough()
